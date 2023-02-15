@@ -50,7 +50,7 @@ struct FrameInfo
     bool indexed;
     EIndexMethod index_method;
     bool diether;
-    int colors;
+    int colors; //color count for indexing method
     std::vector<int> palette;
     std::map<uint32_t, int> color_map;
 };

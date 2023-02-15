@@ -29,10 +29,10 @@ public:
 
     void UpdateIndexedImage();
 
-
     void VideoTab_Init();
     void VideoTab_FullUpdate();
     void VideoTab_Redraw();
+    void VideoTab_UpdateFrameNumber();
     void VideoTab_EventFilter(QObject *object, QEvent *event);
 
     void Image2Index(const QImage &image, std::vector<uint8_t>& index);
@@ -53,7 +53,6 @@ private slots:
     void PaletteFamiWindow_Slot_PaletteSelect(int index);
     void PaletteFamiWindow_Slot_PaletteSpriteSelect(int index);
     void on_pushButton_movie_browse_clicked();
-    void on_checkBox_palette_draw_cvt_stateChanged(int arg1);
     void on_actionExit_triggered();
     void on_actionOpen_triggered();
     void on_actionSave_triggered();
@@ -80,6 +79,9 @@ private slots:
     void on_horizontalSlider_sliderMoved(int position);
     void on_lineEdit_video_frame_number_editingFinished();
     void on_pushButton_base_tiles_browse_clicked();
+    void on_comboBox_video_view_mode_currentIndexChanged(int index);
+
+    void on_comboBox_frame_mode_currentIndexChanged(int index);
 
 private:
     Ui::MainWindow *ui;
@@ -93,8 +95,6 @@ private:
     DialogPickPalette m_pick_color_dialog;
     DialogPickFamiPalette m_pick_fami_palette_dialog;
     uint32_t m_pick_palette_cvt_color;
-    std::map<uint32_t, int> m_palette_cvt_rule;
-    std::map<uint32_t, int> m_palette_sprite_cvt_rule;
     QString m_movie_file_name;
     QImage m_image_original;
     QImage m_image_indexed;

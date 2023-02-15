@@ -521,6 +521,19 @@
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
+            <property name="maximumSize">
+             <size>
+              <width>80</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_nes_frame">
+            <property name="text">
+             <string/>
+            </property>
            </widget>
           </item>
          </layout>
@@ -992,20 +1005,6 @@
             </item>
             <item>
              <widget class="Line" name="line_3">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="checkBox_palette_draw_cvt">
-              <property name="text">
-               <string>Apply NES palette</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="Line" name="line_2">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>

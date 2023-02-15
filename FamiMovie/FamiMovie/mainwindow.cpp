@@ -353,7 +353,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                         uint32_t color = ((const uint32_t*)m_image_indexed.constScanLine(y))[x];
                         color &= 0xFFFFFF;
                         m_pick_palette_cvt_color = color;
-                        auto itt = m_palette_sprite_cvt_rule.find(m_pick_palette_cvt_color);
+
+                        /*auto itt = m_palette_sprite_cvt_rule.find(m_pick_palette_cvt_color);
                         int index = -1;
                         if (itt != m_palette_sprite_cvt_rule.end())
                             index = itt->second;
@@ -364,7 +365,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                         m_pick_fami_palette_dialog.UpdatePalette();
                         m_pick_fami_palette_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
                         connect(&m_pick_fami_palette_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteFamiWindow_Slot_PaletteSpriteSelect(int)), Qt::UniqueConnection);
-                        m_pick_fami_palette_dialog.exec();
+                        m_pick_fami_palette_dialog.exec();*/
                     }
                 } else
                 {
@@ -455,37 +456,25 @@ void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
 void MainWindow::PaletteFamiWindow_Slot_PaletteSelect(int index)
 {
     //qDebug() << "Pick" << index;
+    /*
     auto itt = m_palette_cvt_rule.find(m_pick_palette_cvt_color);
     if (itt != m_palette_cvt_rule.end())
         itt->second = index;
     else
         m_palette_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
-    VideoTab_Redraw();
+    VideoTab_Redraw();*/
 }
 
 void MainWindow::PaletteFamiWindow_Slot_PaletteSpriteSelect(int index)
 {
+    /*
     auto itt = m_palette_sprite_cvt_rule.find(m_pick_palette_cvt_color);
     if (itt != m_palette_sprite_cvt_rule.end())
         itt->second = index;
     else
         m_palette_sprite_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
-    VideoTab_Redraw();
+    VideoTab_Redraw();*/
 }
-
-void MainWindow::on_pushButton_clear_colormapping_clicked()
-{
-    m_palette_cvt_rule.clear();
-    VideoTab_Redraw();
-}
-
-
-
-void MainWindow::on_checkBox_palette_draw_cvt_stateChanged(int)
-{
-    VideoTab_Redraw();
-}
-
 
 void MainWindow::on_actionExit_triggered()
 {
@@ -552,32 +541,40 @@ void MainWindow::SaveProject(const QString &file_name)
     json.get<picojson::object>()["movie_target_height"] = picojson::value( (double)target_height );
 
     picojson::array items = picojson::array();
-    for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
+    for (auto itt = m_frame_info_map.begin(); itt != m_frame_info_map.end(); ++itt)
     {
-            picojson::object item_obj;
-            item_obj["r"] = picojson::value( (double)(itt->first & 0xFF) );
-            item_obj["g"] = picojson::value( (double)((itt->first >> 8) & 0xFF) );
-            item_obj["b"] = picojson::value( (double)((itt->first >> 16) & 0xFF) );
-            //item_obj["a"] = picojson::value( (double)((itt->first >> 24) & 0xFF) );
-            item_obj["i"] = picojson::value( (double)itt->second );
-            items.push_back(picojson::value(item_obj));
-    }
-    json.get<picojson::object>()["color_map"] = picojson::value(items);
+        picojson::object item_obj;
+        item_obj["id"] = picojson::value( (double)(itt->first) );
 
-    {
-        picojson::array items = picojson::array();
-        for (auto itt = m_palette_sprite_cvt_rule.begin(); itt != m_palette_sprite_cvt_rule.end(); ++itt)
+        item_obj["mode"] = picojson::value( (double)(itt->second.frame_mode) );
+        if (itt->second.frame_mode != FrameMode_Skip && itt->second.frame_mode != FrameMode_Black)
         {
-                picojson::object item_obj;
-                item_obj["r"] = picojson::value( (double)(itt->first & 0xFF) );
-                item_obj["g"] = picojson::value( (double)((itt->first >> 8) & 0xFF) );
-                item_obj["b"] = picojson::value( (double)((itt->first >> 16) & 0xFF) );
-                //item_obj["a"] = picojson::value( (double)((itt->first >> 24) & 0xFF) );
-                item_obj["i"] = picojson::value( (double)itt->second );
-                items.push_back(picojson::value(item_obj));
+            item_obj["indexed"] = picojson::value( itt->second.indexed );
+            if (itt->second.indexed)
+            {
+                item_obj["index_method"] = picojson::value( (double)itt->second.index_method );
+                item_obj["diether"] = picojson::value( itt->second.diether );
+                item_obj["colors"] = picojson::value( (double)itt->second.colors );
+            }
+            for (size_t p = 0; p < 16; ++p)
+            {
+                QString name = QString("p%1").arg(p);
+                item_obj[name.toStdString()] = picojson::value( (double)itt->second.palette[p] );
+            }
+            item_obj["color_map"] = picojson::value( (double)itt->second.color_map.size() );
+            size_t color_n = 0;
+            for (auto color_itt = itt->second.color_map.begin(); color_itt != itt->second.color_map.end(); ++color_itt)
+            {
+                item_obj[ QString("r%1").arg(color_n).toStdString() ] = picojson::value( (double)(color_itt->first & 0xFF) );
+                item_obj[ QString("g%1").arg(color_n).toStdString() ] = picojson::value( (double)((color_itt->first >> 8) & 0xFF) );
+                item_obj[ QString("b%1").arg(color_n).toStdString() ] = picojson::value( (double)((color_itt->first >> 16) & 0xFF) );
+                item_obj[ QString("i%1").arg(color_n).toStdString() ] = picojson::value( (double)color_itt->second );
+                ++color_n;
+            }
         }
-        json.get<picojson::object>()["color_sprite_map"] = picojson::value(items);
+        items.push_back(picojson::value(item_obj));
     }
+    json.get<picojson::object>()["frame_info"] = picojson::value(items);
 
     {
         picojson::array items = picojson::array();
@@ -707,33 +704,53 @@ void MainWindow::LoadProject(const QString &file_name)
     if (json.contains("movie_target_height"))
         ui->lineEdit_target_height->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_target_height"].get<double>()));
 
-    m_palette_cvt_rule.clear();
-    if (json.contains("color_map"))
+    m_frame_info_map.clear();
+    if (json.contains("frame_info"))
     {
-        picojson::array items = json.get<picojson::object>()["color_map"].get<picojson::array>();
+        picojson::array items = json.get<picojson::object>()["frame_info"].get<picojson::array>();
         for (auto itt = items.begin(); itt != items.end(); ++itt)
         {
-            uint32_t r = (uint32_t)(itt->get<picojson::object>()["r"].get<double>());
-            uint32_t g = (uint32_t)(itt->get<picojson::object>()["g"].get<double>());
-            uint32_t b = (uint32_t)(itt->get<picojson::object>()["b"].get<double>());
-            uint32_t a = 0x00;//(uint32_t)(itt->get<picojson::object>()["a"].get<double>());
-            int i = (int)(itt->get<picojson::object>()["i"].get<double>());
-            m_palette_cvt_rule.insert(std::make_pair(r | (g<<8) | (b<<16) | (a<<24), i));
-        }
-    }
-
-    m_palette_sprite_cvt_rule.clear();
-    if (json.contains("color_sprite_map"))
-    {
-        picojson::array items = json.get<picojson::object>()["color_sprite_map"].get<picojson::array>();
-        for (auto itt = items.begin(); itt != items.end(); ++itt)
-        {
-            uint32_t r = (uint32_t)(itt->get<picojson::object>()["r"].get<double>());
-            uint32_t g = (uint32_t)(itt->get<picojson::object>()["g"].get<double>());
-            uint32_t b = (uint32_t)(itt->get<picojson::object>()["b"].get<double>());
-            uint32_t a = 0x00;//(uint32_t)(itt->get<picojson::object>()["a"].get<double>());
-            int i = (int)(itt->get<picojson::object>()["i"].get<double>());
-            m_palette_sprite_cvt_rule.insert(std::make_pair(r | (g<<8) | (b<<16) | (a<<24), i));
+            int id = (int)(itt->get<picojson::object>()["id"].get<double>());
+            FrameInfo info;
+            info.frame_mode = (EFrameMode)(itt->get<picojson::object>()["mode"].get<double>());
+            if (info.frame_mode != FrameMode_Skip && info.frame_mode != FrameMode_Black)
+            {
+                info.indexed = itt->get<picojson::object>()["indexed"].get<bool>();
+                if (info.indexed)
+                {
+                    info.index_method = (EIndexMethod)(itt->get<picojson::object>()["index_method"].get<double>());
+                    info.diether = itt->get<picojson::object>()["diether"].get<bool>();
+                    info.colors = (int)(itt->get<picojson::object>()["colors"].get<double>());
+                } else
+                {
+                    info.index_method = IndexMethod_DivQuantizer;
+                    info.diether = false;
+                    info.colors = 4;
+                }
+                info.palette.resize(16, 0x0f);
+                for (size_t p = 0; p < 16; ++p)
+                {
+                    QString name = QString("p%1").arg(p);
+                    info.palette[p] = (int)(itt->get<picojson::object>()[name.toStdString()].get<double>());
+                }
+                int color_map = (int)(itt->get<picojson::object>()["color_map"].get<double>());
+                for (int c = 0; c < color_map; ++c)
+                {
+                    int r = (int)(itt->get<picojson::object>()[QString("p%1").arg(c).toStdString()].get<double>());
+                    int g = (int)(itt->get<picojson::object>()[QString("g%1").arg(c).toStdString()].get<double>());
+                    int b = (int)(itt->get<picojson::object>()[QString("b%1").arg(c).toStdString()].get<double>());
+                    int i = (int)(itt->get<picojson::object>()[QString("i%1").arg(c).toStdString()].get<double>());
+                    info.color_map.insert(std::make_pair(r | (g << 8) | (b << 16), i));
+                }
+            } else
+            {
+                info.indexed = false;
+                info.index_method = IndexMethod_DivQuantizer;
+                info.diether = false;
+                info.colors = 4;
+                info.palette.resize(16, 0x0f);
+            }
+            m_frame_info_map.insert(std::make_pair(id, info));
         }
     }
 
@@ -1151,31 +1168,6 @@ void MainWindow::on_checkBox_oam_fill_any_color_clicked()
     m_oam_vector[m_oam_selected].mode = ui->checkBox_oam_fill_any_color->isChecked();
     RedrawOamTab();
 }
-
-void MainWindow::on_lineEdit_palette_color_count_editingFinished()
-{
-    UpdateIndexedImage();
-    VideoTab_Redraw();
-}
-
-void MainWindow::on_checkBox_palette_deither_clicked()
-{
-    UpdateIndexedImage();
-    VideoTab_Redraw();
-}
-
-void MainWindow::on_comboBox_palette_method_currentIndexChanged(int)
-{
-    UpdateIndexedImage();
-    VideoTab_Redraw();
-}
-
-void MainWindow::on_checkBox_make_indexed_clicked()
-{
-    UpdateIndexedImage();
-    VideoTab_Redraw();
-}
-
 
 void MainWindow::on_checkBox_draw_grid_clicked()
 {
