@@ -3,6 +3,58 @@
 #include <vector>
 #include <map>
 
+enum EViewMode
+{
+    ViewMode_Original = 0,
+    ViewMode_Crop,
+    ViewMode_Indexed,
+    ViewMode_NesPalette,
+    ViewMode_TileConverted,
+    ViewMode_TileOptimized
+};
+
+enum EFrameMode
+{
+    FrameMode_Skip = 0,
+    FrameMode_Black,
+    FrameMode_KeyFrame,
+    FrameMode_Inter,
+};
+
+enum EIndexMethod
+{
+    IndexMethod_DivQuantizer = 0,
+    IndexMethod_Dl3Quantizer,
+    IndexMethod_EdgeAwareSQuantizer,
+    IndexMethod_MedianCut,
+    IndexMethod_MoDEQuantizer,
+    IndexMethod_NeuQuantizer,
+    IndexMethod_PnnLABQuantizer,
+    IndexMethod_PnnQuantizer,
+    IndexMethod_SpatialQuantizer,
+    IndexMethod_WuQuantizer
+};
+
+struct Tile
+{
+    std::vector<uint8_t> bits;
+    bool operator < (const Tile& other ) const
+    {
+        return (bits < other.bits);
+    }
+};
+
+struct FrameInfo
+{
+    EFrameMode frame_mode;
+    bool indexed;
+    EIndexMethod index_method;
+    bool diether;
+    int colors;
+    std::vector<int> palette;
+    std::map<uint32_t, int> color_map;
+};
+
 enum ECompression
 {
     Compression_None = 0,

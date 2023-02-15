@@ -9,9 +9,12 @@ CONFIG += c++17
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    AviReader.cpp \
     Export.cpp \
     Palette.cpp \
     Sprite.cpp \
+    TabGeneral.cpp \
+    TabVideo.cpp \
     dialogPickFamiPalette.cpp \
     dialogpickpalette.cpp \
     main.cpp \
@@ -30,6 +33,7 @@ SOURCES += \
     nQuant/bitmapUtilities.cpp
 
 HEADERS += \
+    AviReader.h \
     Palette.h \
     Sprite.h \
     dialogPickFamiPalette.h \

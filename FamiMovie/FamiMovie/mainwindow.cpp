@@ -25,7 +25,6 @@
 #include "nQuant/SpatialQuantizer.h"
 #include "nQuant/WuQuantizer.h"
 
-static QLabel* s_palette_tab_render;
 static QLabel* s_attribute_tab_render;
 static QLabel* s_oam_tab_render;
 static const int s_corner_size = 8;
@@ -36,84 +35,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    m_palette_label[0] = ui->label_palette_0_0;
-    m_palette_label[1] = ui->label_palette_0_1;
-    m_palette_label[2] = ui->label_palette_0_2;
-    m_palette_label[3] = ui->label_palette_0_3;
 
-    m_palette_label[4] = ui->label_palette_1_0;
-    m_palette_label[5] = ui->label_palette_1_1;
-    m_palette_label[6] = ui->label_palette_1_2;
-    m_palette_label[7] = ui->label_palette_1_3;
-
-    m_palette_label[8] = ui->label_palette_2_0;
-    m_palette_label[9] = ui->label_palette_2_1;
-    m_palette_label[10] = ui->label_palette_2_2;
-    m_palette_label[11] = ui->label_palette_2_3;
-
-    m_palette_label[12] = ui->label_palette_3_0;
-    m_palette_label[13] = ui->label_palette_3_1;
-    m_palette_label[14] = ui->label_palette_3_2;
-    m_palette_label[15] = ui->label_palette_3_3;
-
-    m_pick_pallete_index = 0;
-    for (int i = 0; i < 16; ++i)
-        m_palette_label[i]->installEventFilter(this);
-
-    m_palette_sprite_label[0]  = ui->label_pal_sprite_0_0;
-    m_palette_sprite_label[1]  = ui->label_pal_sprite_0_1;
-    m_palette_sprite_label[2]  = ui->label_pal_sprite_0_2;
-    m_palette_sprite_label[3]  = ui->label_pal_sprite_0_3;
-    m_palette_sprite_label[4]  = ui->label_pal_sprite_1_0;
-    m_palette_sprite_label[5]  = ui->label_pal_sprite_1_1;
-    m_palette_sprite_label[6]  = ui->label_pal_sprite_1_2;
-    m_palette_sprite_label[7]  = ui->label_pal_sprite_1_3;
-    m_palette_sprite_label[8]  = ui->label_pal_sprite_2_0;
-    m_palette_sprite_label[9]  = ui->label_pal_sprite_2_1;
-    m_palette_sprite_label[10] = ui->label_pal_sprite_2_2;
-    m_palette_sprite_label[11] = ui->label_pal_sprite_2_3;
-    m_palette_sprite_label[12] = ui->label_pal_sprite_3_0;
-    m_palette_sprite_label[13] = ui->label_pal_sprite_3_1;
-    m_palette_sprite_label[14] = ui->label_pal_sprite_3_2;
-    m_palette_sprite_label[15] = ui->label_pal_sprite_3_3;
-
-    for (int i = 0; i < 16; ++i)
-        m_palette_sprite_label[i]->installEventFilter(this);
-
-    ui->comboBox_palette_mode->blockSignals(true);
-    ui->comboBox_palette_mode->addItem("2C02 (Famicom)", QVariant((int)Palette_2C02));
-    ui->comboBox_palette_mode->addItem("2C03", QVariant((int)Palette_2C03));
-    ui->comboBox_palette_mode->addItem("2C04", QVariant((int)Palette_2C04));
-    ui->comboBox_palette_mode->addItem("fceux", QVariant((int)Palette_fceux));
-    ui->comboBox_palette_mode->blockSignals(false);
-
-    ui->comboBox_sprite_mode->blockSignals(true);
-    ui->comboBox_sprite_mode->addItem("8x8", QVariant((int)SpriteMode_8x8));
-    ui->comboBox_sprite_mode->addItem("8x16", QVariant((int)SpriteMode_8x16));
-    ui->comboBox_sprite_mode->blockSignals(false);
-
-    on_comboBox_palette_mode_currentIndexChanged(0);
-
-
-    //-------------------------------------------------------------------------------
-    m_palette_tab_zoom = 1;
-    s_palette_tab_render = new QLabel();
-    s_palette_tab_render->move(0, 0);
-    ui->scrollArea_palette_tab->setWidget(s_palette_tab_render);
-    s_palette_tab_render->installEventFilter(this);
-    s_palette_tab_render->setMouseTracking(true);
-    ui->scrollArea_palette_tab->installEventFilter(this);
-
-    ui->comboBox_palette_method->addItem("DivQuantizer");
-    ui->comboBox_palette_method->addItem("Dl3Quantizer");
-    //ui->combo_method->addItem("EdgeAwareSQuantizer");
-    ui->comboBox_palette_method->addItem("MedianCut");
-    //ui->combo_method->addItem("MoDEQuantizer");
-    ui->comboBox_palette_method->addItem("NeuQuantizer");
-    ui->comboBox_palette_method->addItem("PnnLABQuantizer");
-    ui->comboBox_palette_method->addItem("PnnQuantizer");
-    ui->comboBox_palette_method->addItem("SpatialQuantizer");
-    ui->comboBox_palette_method->addItem("WuQuantizer");
+    GeneralTab_Init();
+    VideoTab_Init();
 
     //-------------------------------------------------------------------------------
     m_attribute_tab_zoom = 1;
@@ -155,102 +79,15 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_comboBox_palette_mode_currentIndexChanged(int index)
-{
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(index).toInt());
-    static const int cell_size = 24;
-    QImage image(16*cell_size, 4*cell_size, QImage::Format_ARGB32);
-    image.fill(0x00);
-    {
-        QPainter painter(&image);
-        painter.setPen(QColor(0xFFFFFFFF));
-        for (int y = 0; y < 4; ++y)
-        {
-            for (int x = 0; x < 16; ++x)
-            {
-                painter.setBrush(QColor(palette[x+y*16] | 0xFF000000));
-                painter.drawRect(x*cell_size, y*cell_size, cell_size, cell_size);
-            }
-        }
-    }
-    ui->label_general_palette->setPixmap(QPixmap::fromImage(image));
-    ui->label_general_palette->setMinimumSize(image.size());
-    ui->label_general_palette->setMaximumSize(image.size());
 
-    for (int i = 0; i < 16; ++i)
-    {
-        QImage image(m_palette_label[i]->width(), m_palette_label[i]->height(), QImage::Format_ARGB32);
-        image.fill(palette[m_palette_set[i/4].c[i & 3]]);
-        m_palette_label[i]->setPixmap(QPixmap::fromImage(image));
-    }
-
-    for (int i = 0; i < 16; ++i)
-    {
-        QImage image(m_palette_sprite_label[i]->width(), m_palette_sprite_label[i]->height(), QImage::Format_ARGB32);
-        image.fill(palette[m_palette_sprite[i/4].c[i & 3]]);
-        m_palette_sprite_label[i]->setPixmap(QPixmap::fromImage(image));
-    }
-
-    RedrawPaletteTab();
-}
 
 void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
 {
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     index.resize(image.width()*image.height());
 
-    if (ui->checkBox_two_frames_blinking->isChecked())
-    {
-        //Make blinking palette
-        std::vector<uint32_t> blinkpal(7*4, 0);
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
 
-        for (int y = 0; y < image.height(); ++y)
-        {
-            const uchar* line_ptr = image.constScanLine(y);
-            uint8_t* dest_ptr = index.data() + y*image.width();
-            for (int x = 0; x < image.width(); ++x)
-            {
-                uint32_t color = ((const uint32_t*)line_ptr)[x] & 0xFFFFFF;
-                auto itt = m_palette_cvt_rule.find(color);
-                if (itt != m_palette_cvt_rule.end())
-                {
-                    dest_ptr[x] = itt->second;
-                    continue;
-                }
-
-                int r = color & 0xFF;
-                int g = (color >> 8) & 0xFF;
-                int b = (color >> 16) & 0xFF;
-                int best_index = 0;
-                uint64_t best_diff = UINT64_MAX;
-                for (int c = 0; c < 7*4; ++c)
-                {
-                    uint32_t pcol = blinkpal[c];
-                    int pr = pcol & 0xFF;
-                    int pg = (pcol >> 8) & 0xFF;
-                    int pb = (pcol >> 16) & 0xFF;
-                    uint64_t diff = (r-pr)*(r-pr) + (g-pg)*(g-pg) + (b-pb)*(b-pb);
-                    if (diff < best_diff)
-                    {
-                        best_diff = diff;
-                        best_index = c;
-                    }
-                }
-                dest_ptr[x] = best_index;
-            }
-        }
-    } else
-    {
+    /*{
         for (int y = 0; y < image.height(); ++y)
         {
             const uchar* line_ptr = image.constScanLine(y);
@@ -286,7 +123,7 @@ void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
                 dest_ptr[x] = best_index;
             }
         }
-    }
+    }*/
 }
 
 void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, int width, int height)
@@ -295,33 +132,8 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
     if (image.width() != width || image.height() != height)
         image = QImage(width, height, QImage::Format_ARGB32);
 
-    if (ui->checkBox_two_frames_blinking->isChecked())
-    {
-        //Make blinking palette
-        std::vector<uint32_t> blinkpal(7*4, 0);
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
 
-        for (int y = 0; y < height; ++y)
-        {
-            uchar* line_ptr = image.scanLine(y);
-            const uint8_t* index_ptr = index.data() + y*width;
-            for (int x = 0; x < width; ++x)
-            {
-                int c = index_ptr[x];
-                ((uint32_t*)line_ptr)[x] = blinkpal[c];
-            }
-        }
-    } else
-    {
+    /*{
         for (int y = 0; y < height; ++y)
         {
             uchar* line_ptr = image.scanLine(y);
@@ -332,7 +144,7 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
                 ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
             }
         }
-    }
+    }*/
 }
 
 void MainWindow::UpdateIndexedImage()
@@ -448,36 +260,13 @@ void MainWindow::UpdateIndexedImage()
     }
 }
 
-void MainWindow::RedrawPaletteTab()
-{
-    if (m_image_original.isNull())
-        return;
 
-    QImage image;
-    if (ui->checkBox_palette_draw_cvt->isChecked())
-    {
-        Image2Index(m_image_indexed, m_spriteset_index);
-        QImage pal_cvt_image;
-        Index2Image(m_spriteset_index, pal_cvt_image, m_image_indexed.width(), m_image_indexed.height());
-        image = pal_cvt_image.scaled(pal_cvt_image.width()*m_palette_tab_zoom, pal_cvt_image.height()*m_palette_tab_zoom);
-    } else
-        image = m_image_indexed.scaled(m_image_indexed.width()*m_palette_tab_zoom, m_image_indexed.height()*m_palette_tab_zoom);
-    s_palette_tab_render->setPixmap(QPixmap::fromImage(image));
-    s_palette_tab_render->resize(image.width(), image.height());
-    s_palette_tab_render->setMaximumSize(image.width(), image.height());
-    s_palette_tab_render->setMinimumSize(image.width(), image.height());
-
-    uint32_t bg_color = ((const uint32_t*)image.constBits())[0];
-    QImage img(ui->label_spriteset_bg->width(), ui->label_spriteset_bg->height(), QImage::Format_ARGB32);
-    img.fill(bg_color);
-    ui->label_spriteset_bg->setPixmap(QPixmap::fromImage(img));
-}
 
 bool MainWindow::eventFilter( QObject* object, QEvent* event )
 {
     if (event->type() == QEvent::MouseButtonPress)
     {
-        for (int i = 0; i < 16; ++i)
+        /*for (int i = 0; i < 16; ++i)
         {
             if (object == m_palette_label[i])
             {
@@ -491,80 +280,12 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 m_pick_color_dialog.exec();
                 break;
             }
-        }
-        for (int i = 0; i < 16; ++i)
-        {
-            if (object == m_palette_sprite_label[i])
-            {
-                m_pick_pallete_index = i;
-                const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                m_pick_color_dialog.SetPalette(palette);
-                m_pick_color_dialog.SetPaletteIndex(m_palette_sprite[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]);
-                m_pick_color_dialog.UpdatePalette();
-                m_pick_color_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
-                connect(&m_pick_color_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteWindow_Slot_PaletteSpriteSelect(int)), Qt::UniqueConnection);
-                m_pick_color_dialog.exec();
-                break;
-            }
-        }
+        }*/
     }
 
-    if (object == s_palette_tab_render)
-    {
-        if (event->type() == QEvent::MouseButtonPress)
-        {
-            QMouseEvent* mouse_event = (QMouseEvent*)event;
-            if ( (int)(mouse_event->buttons() & Qt::RightButton) != 0 )
-            {
-                int x = mouse_event->x()/(m_palette_tab_zoom);
-                int y = mouse_event->y()/(m_palette_tab_zoom);
-                if (!m_image_indexed.isNull()
-                        && x < m_image_indexed.width()
-                        && y < m_image_indexed.height())
-                {
-                    uint32_t color = ((const uint32_t*)m_image_indexed.constScanLine(y))[x];
-                    color &= 0xFFFFFF;
-                    m_pick_palette_cvt_color = color;
-                    auto itt = m_palette_cvt_rule.find(m_pick_palette_cvt_color);
-                    int index = -1;
-                    if (itt != m_palette_cvt_rule.end())
-                        index = itt->second;
-                    m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
-                    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                    m_pick_fami_palette_dialog.SetPalette(palette, m_palette_set);
-                    m_pick_fami_palette_dialog.SetPaletteIndex(index);
-                    m_pick_fami_palette_dialog.SetBlinkingPaletteMode(ui->checkBox_two_frames_blinking->isChecked());
-                    m_pick_fami_palette_dialog.UpdatePalette();
-                    m_pick_fami_palette_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
-                    connect(&m_pick_fami_palette_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteFamiWindow_Slot_PaletteSelect(int)), Qt::UniqueConnection);
-                    m_pick_fami_palette_dialog.exec();
-                }
-            }
-        }
-    }
-    if (object == ui->scrollArea_palette_tab)
-    {
-        if (event->type() == QEvent::KeyPress)
-        {
-            QKeyEvent* key = static_cast<QKeyEvent*>(event);
-            if(key->key() == Qt::Key_Plus)
-            {
-                m_palette_tab_zoom ++;
-                if (m_palette_tab_zoom > 4)
-                    m_palette_tab_zoom = 4;
-                else
-                    RedrawPaletteTab();
-            }
-            if(key->key() == Qt::Key_Minus)
-            {
-                m_palette_tab_zoom --;
-                if (m_palette_tab_zoom < 1)
-                    m_palette_tab_zoom = 1;
-                else
-                    RedrawPaletteTab();
-            }
-        }
-    }
+    VideoTab_EventFilter(object, event);
+
+
     if (object == ui->scrollArea_attribute)
     {
         if (event->type() == QEvent::KeyPress)
@@ -637,10 +358,9 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                         if (itt != m_palette_sprite_cvt_rule.end())
                             index = itt->second;
                         m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
-                        const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                        m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite);
+                        //const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
+                        //m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite);
                         m_pick_fami_palette_dialog.SetPaletteIndex(index);
-                        m_pick_fami_palette_dialog.SetBlinkingPaletteMode(ui->checkBox_two_frames_blinking->isChecked());
                         m_pick_fami_palette_dialog.UpdatePalette();
                         m_pick_fami_palette_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
                         connect(&m_pick_fami_palette_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteFamiWindow_Slot_PaletteSpriteSelect(int)), Qt::UniqueConnection);
@@ -667,7 +387,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     RedrawOamTab();
                 }
             }
-            if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
+
+            /*if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
             {
                 m_oam_start_point.setX(x);
                 m_oam_start_point.setY(y);
@@ -692,9 +413,9 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     ui->radioButton_oam_pal3->setChecked(m_oam_vector[m_oam_selected].palette == 3);
                 }
                 RedrawOamTab();
-            }
+            }*/
         }
-        if (event->type() == QEvent::MouseMove)
+        /*if (event->type() == QEvent::MouseMove)
         {
             QMouseEvent* mouse_event = (QMouseEvent*)event;
             int x = mouse_event->x()/(m_oam_tab_zoom);
@@ -722,27 +443,13 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     m_oam_vector[m_oam_selected].y = m_image_indexed.height()-1;
                 RedrawOamTab();
             }
-        }
+        }*/
     }
     return QWidget::eventFilter( object, event );
 }
 
 void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
 {
-    m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3] = index;
-    QImage image(m_palette_label[m_pick_pallete_index]->width(), m_palette_label[m_pick_pallete_index]->height(), QImage::Format_ARGB32);
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-    image.fill(palette[m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]]);
-    m_palette_label[m_pick_pallete_index]->setPixmap(QPixmap::fromImage(image));
-}
-
-void MainWindow::PaletteWindow_Slot_PaletteSpriteSelect(int index)
-{
-    m_palette_sprite[m_pick_pallete_index/4].c[m_pick_pallete_index & 3] = index;
-    QImage image(m_palette_label[m_pick_pallete_index]->width(), m_palette_label[m_pick_pallete_index]->height(), QImage::Format_ARGB32);
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-    image.fill(palette[m_palette_sprite[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]]);
-    m_palette_sprite_label[m_pick_pallete_index]->setPixmap(QPixmap::fromImage(image));
 }
 
 void MainWindow::PaletteFamiWindow_Slot_PaletteSelect(int index)
@@ -753,7 +460,7 @@ void MainWindow::PaletteFamiWindow_Slot_PaletteSelect(int index)
         itt->second = index;
     else
         m_palette_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 void MainWindow::PaletteFamiWindow_Slot_PaletteSpriteSelect(int index)
@@ -763,32 +470,20 @@ void MainWindow::PaletteFamiWindow_Slot_PaletteSpriteSelect(int index)
         itt->second = index;
     else
         m_palette_sprite_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 void MainWindow::on_pushButton_clear_colormapping_clicked()
 {
     m_palette_cvt_rule.clear();
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
-void MainWindow::on_pushButton_sprite_browse_clicked()
-{
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), QDir::currentPath(), tr("*.jpg *.png"));
-     if (file_name.isEmpty())
-         return;
-
-     ui->lineEdit_sprite_image->setText(file_name);
-     m_spriteset_file_name = file_name;
-     m_image_original.load(file_name);
-     UpdateIndexedImage();
-     RedrawPaletteTab();
-}
 
 
 void MainWindow::on_checkBox_palette_draw_cvt_stateChanged(int)
 {
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 
@@ -800,7 +495,7 @@ void MainWindow::on_actionExit_triggered()
 
 void MainWindow::on_actionOpen_triggered()
 {
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), QDir::currentPath(), "*.famiscreen");
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), QDir::currentPath(), "*.famimovie");
      if (file_name.isEmpty())
          return;
     m_project_file_name = file_name;
@@ -817,11 +512,9 @@ void MainWindow::on_actionSave_triggered()
 
 void MainWindow::on_actionSave_as_triggered()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", QDir::currentPath(), "*.famiscreen");
+    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", QDir::currentPath(), "*.famimovie");
     if (file_name.isEmpty())
         return;
-    //if (file_name.right(8) != ".famiscreen")
-    //    file_name += ".famiscreen";
     m_project_file_name = file_name;
     SaveProject(m_project_file_name);
 }
@@ -831,57 +524,32 @@ void MainWindow::SaveProject(const QString &file_name)
     picojson::value json;
     json.set<picojson::object>(picojson::object());
     json.get<picojson::object>()["palette_mode"] = picojson::value( (double)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt() );
-    json.get<picojson::object>()["palette_0_0"] = picojson::value( (double)m_palette_set[0].c[0] );
-    json.get<picojson::object>()["palette_0_1"] = picojson::value( (double)m_palette_set[0].c[1] );
-    json.get<picojson::object>()["palette_0_2"] = picojson::value( (double)m_palette_set[0].c[2] );
-    json.get<picojson::object>()["palette_0_3"] = picojson::value( (double)m_palette_set[0].c[3] );
+    //json.get<picojson::object>()["palette_0_0"] = picojson::value( (double)m_palette_set[0].c[0] );
 
-    json.get<picojson::object>()["palette_1_0"] = picojson::value( (double)m_palette_set[1].c[0] );
-    json.get<picojson::object>()["palette_1_1"] = picojson::value( (double)m_palette_set[1].c[1] );
-    json.get<picojson::object>()["palette_1_2"] = picojson::value( (double)m_palette_set[1].c[2] );
-    json.get<picojson::object>()["palette_1_3"] = picojson::value( (double)m_palette_set[1].c[3] );
-
-    json.get<picojson::object>()["palette_2_0"] = picojson::value( (double)m_palette_set[2].c[0] );
-    json.get<picojson::object>()["palette_2_1"] = picojson::value( (double)m_palette_set[2].c[1] );
-    json.get<picojson::object>()["palette_2_2"] = picojson::value( (double)m_palette_set[2].c[2] );
-    json.get<picojson::object>()["palette_2_3"] = picojson::value( (double)m_palette_set[2].c[3] );
-
-    json.get<picojson::object>()["palette_3_0"] = picojson::value( (double)m_palette_set[3].c[0] );
-    json.get<picojson::object>()["palette_3_1"] = picojson::value( (double)m_palette_set[3].c[1] );
-    json.get<picojson::object>()["palette_3_2"] = picojson::value( (double)m_palette_set[3].c[2] );
-    json.get<picojson::object>()["palette_3_3"] = picojson::value( (double)m_palette_set[3].c[3] );
-
-    json.get<picojson::object>()["sprite_p_0_0"] = picojson::value( (double)m_palette_sprite[0].c[0] );
-    json.get<picojson::object>()["sprite_p_0_1"] = picojson::value( (double)m_palette_sprite[0].c[1] );
-    json.get<picojson::object>()["sprite_p_0_2"] = picojson::value( (double)m_palette_sprite[0].c[2] );
-    json.get<picojson::object>()["sprite_p_0_3"] = picojson::value( (double)m_palette_sprite[0].c[3] );
-
-    json.get<picojson::object>()["sprite_p_1_0"] = picojson::value( (double)m_palette_sprite[1].c[0] );
-    json.get<picojson::object>()["sprite_p_1_1"] = picojson::value( (double)m_palette_sprite[1].c[1] );
-    json.get<picojson::object>()["sprite_p_1_2"] = picojson::value( (double)m_palette_sprite[1].c[2] );
-    json.get<picojson::object>()["sprite_p_1_3"] = picojson::value( (double)m_palette_sprite[1].c[3] );
-
-    json.get<picojson::object>()["sprite_p_2_0"] = picojson::value( (double)m_palette_sprite[2].c[0] );
-    json.get<picojson::object>()["sprite_p_2_1"] = picojson::value( (double)m_palette_sprite[2].c[1] );
-    json.get<picojson::object>()["sprite_p_2_2"] = picojson::value( (double)m_palette_sprite[2].c[2] );
-    json.get<picojson::object>()["sprite_p_2_3"] = picojson::value( (double)m_palette_sprite[2].c[3] );
-
-    json.get<picojson::object>()["sprite_p_3_0"] = picojson::value( (double)m_palette_sprite[3].c[0] );
-    json.get<picojson::object>()["sprite_p_3_1"] = picojson::value( (double)m_palette_sprite[3].c[1] );
-    json.get<picojson::object>()["sprite_p_3_2"] = picojson::value( (double)m_palette_sprite[3].c[2] );
-    json.get<picojson::object>()["sprite_p_3_3"] = picojson::value( (double)m_palette_sprite[3].c[3] );
-
-    json.get<picojson::object>()["sprite_mode"] = picojson::value( (double)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt() );
-    json.get<picojson::object>()["sprite_set"] = picojson::value( m_spriteset_file_name.toUtf8().toBase64().data() );
+    json.get<picojson::object>()["movie_file_name"] = picojson::value( m_movie_file_name.toUtf8().toBase64().data() );
     json.get<picojson::object>()["name"] = picojson::value( ui->lineEdit_name->text().toUtf8().toBase64().data() );
     json.get<picojson::object>()["compression"] = picojson::value( (double)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt() );
     json.get<picojson::object>()["chr_align"] = picojson::value( (double)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt() );
+    json.get<picojson::object>()["base_tiles"] = picojson::value( ui->lineEdit_base_tiles->text().toUtf8().toBase64().data() );
 
     json.get<picojson::object>()["indexed_apply"] = picojson::value( (bool)ui->checkBox_make_indexed->isChecked() );
     json.get<picojson::object>()["indexed_method"] = picojson::value( ui->comboBox_palette_method->currentText().toStdString() );
     json.get<picojson::object>()["indexed_diether"] = picojson::value( (bool)ui->checkBox_palette_deither->isChecked() );
     json.get<picojson::object>()["indexed_colors"] = picojson::value( (double)ui->lineEdit_palette_color_count->text().toInt() );
-    json.get<picojson::object>()["two_frames_blinking"] = picojson::value( (bool)ui->checkBox_two_frames_blinking->isChecked() );
+
+    int crop_x = ui->lineEdit_crop_x->text().toInt();
+    int crop_y = ui->lineEdit_crop_y->text().toInt();
+    int crop_width = ui->lineEdit_crop_width->text().toInt();
+    int crop_height = ui->lineEdit_crop_height->text().toInt();
+    json.get<picojson::object>()["movie_crop_x"] = picojson::value( (double)crop_x );
+    json.get<picojson::object>()["movie_crop_y"] = picojson::value( (double)crop_y );
+    json.get<picojson::object>()["movie_crop_width"] = picojson::value( (double)crop_width );
+    json.get<picojson::object>()["movie_crop_height"] = picojson::value( (double)crop_height );
+
+    int target_width = ui->lineEdit_target_width->text().toInt();
+    int target_height = ui->lineEdit_target_height->text().toInt();
+    json.get<picojson::object>()["movie_target_width"] = picojson::value( (double)target_width );
+    json.get<picojson::object>()["movie_target_height"] = picojson::value( (double)target_height );
 
     picojson::array items = picojson::array();
     for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
@@ -967,20 +635,6 @@ void MainWindow::LoadProject(const QString &file_name)
     }
     ui->comboBox_palette_mode->blockSignals(false);
 
-    for (int n = 0; n < 16; ++n)
-    {
-        QString name = QString("palette_%1_%2").arg(n >> 2).arg(n & 3);
-        if (json.contains(name.toStdString()))
-            m_palette_set[n >> 2].c[n & 3] = (int)json.get<picojson::object>()[name.toStdString()].get<double>();
-    }
-
-    for (int n = 0; n < 16; ++n)
-    {
-        QString name = QString("sprite_p_%1_%2").arg(n >> 2).arg(n & 3);
-        if (json.contains(name.toStdString()))
-            m_palette_sprite[n >> 2].c[n & 3] = (int)json.get<picojson::object>()[name.toStdString()].get<double>();
-    }
-
     {
         int compression = Compression_None;
         if (json.contains("compression"))
@@ -1018,32 +672,40 @@ void MainWindow::LoadProject(const QString &file_name)
         name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["name"].get<std::string>().c_str()));
     ui->lineEdit_name->setText(name);
 
-    int sprite_mode = SpriteMode_8x8;
-    if (json.contains("sprite_mode"))
-        sprite_mode = json.get<picojson::object>()["sprite_mode"].get<double>();
-    ui->comboBox_sprite_mode->blockSignals(true);
-    for (int i = 0; i < ui->comboBox_palette_mode->count(); ++i)
-    {
-        if (ui->comboBox_sprite_mode->itemData(i).toInt() == sprite_mode)
-        {
-            ui->comboBox_sprite_mode->setCurrentIndex(i);
-            break;
-        }
-    }
-    ui->comboBox_sprite_mode->blockSignals(false);
+    m_movie_file_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["movie_file_name"].get<std::string>().c_str()));
+    ui->lineEdit_move_file_name->setText(m_movie_file_name);
 
-    m_spriteset_file_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["sprite_set"].get<std::string>().c_str()));
-    if (!m_spriteset_file_name.isEmpty())
+    try {
+        m_avi_reader = std::make_shared<AviReader>(m_movie_file_name.toStdWString().c_str());
+    } catch (const std::exception &ex)
     {
-        if (!m_image_original.load(m_spriteset_file_name))
-        {
-            QMessageBox::critical(0, "Error", "Can't load image: " + m_spriteset_file_name + ", " + file.errorString());
-            m_spriteset_file_name.clear();
-        } else
-        {
-            ui->lineEdit_sprite_image->setText(file_name);
-        }
+       QMessageBox::critical(0, "Error", QString("Can't read movie: %1").arg(ex.what()));
+       return;
     }
+
+    if (m_avi_reader->VideoCompression() != 0)
+    {
+        QMessageBox::critical(0, "Error", "Video has to be uncompressed");
+        m_avi_reader.reset();
+        return;
+    }
+
+    if (json.contains("base_tiles"))
+        ui->lineEdit_base_tiles->setText( QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["base_tiles"].get<std::string>().c_str())) );
+
+    if (json.contains("movie_crop_x"))
+        ui->lineEdit_crop_x->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_x"].get<double>()));
+    if (json.contains("movie_crop_y"))
+        ui->lineEdit_crop_x->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_y"].get<double>()));
+    if (json.contains("movie_crop_width"))
+        ui->lineEdit_crop_width->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_width"].get<double>()));
+    if (json.contains("movie_crop_height"))
+        ui->lineEdit_crop_height->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_height"].get<double>()));
+
+    if (json.contains("movie_target_width"))
+        ui->lineEdit_target_width->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_target_width"].get<double>()));
+    if (json.contains("movie_target_height"))
+        ui->lineEdit_target_height->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_target_height"].get<double>()));
 
     m_palette_cvt_rule.clear();
     if (json.contains("color_map"))
@@ -1095,8 +757,6 @@ void MainWindow::LoadProject(const QString &file_name)
         }
         ui->comboBox_palette_method->blockSignals(false);
     }
-    if (json.contains("two_frames_blinking"))
-        ui->checkBox_two_frames_blinking->setChecked(json.get<picojson::object>()["two_frames_blinking"].get<bool>());
 
     m_oam_vector.clear();
     if (json.contains("oam"))
@@ -1113,8 +773,11 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
+    GeneralTab_UpdateMovieInfo();
+    GeneralTab_ReloadBaseTiles();
+    VideoTab_FullUpdate();
     UpdateIndexedImage();
-    on_comboBox_palette_mode_currentIndexChanged(palette_mode);
+    GeneralTab_UpdatePalette();
     RedrawAttributeTab();
     FullUpdateOamTab();
 }
@@ -1124,7 +787,7 @@ void MainWindow::RedrawAttributeTab()
     if (m_image_original.isNull())
         return;
 
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
+    /*const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     m_image_screen = QImage(256, 240, QImage::Format_ARGB32);
     m_image_screen.fill(palette[m_palette_set[0].c[0]]);
     {
@@ -1249,12 +912,6 @@ void MainWindow::RedrawAttributeTab()
     }
     ui->label_attribute_tiles->setText(QString("%1 Tiles").arg(tile_set.size()));
 
-    /*{
-        QFile file("tiles.bin");
-        file.open(QFile::WriteOnly);
-        file.write((char*)m_screen_tiles.data(), m_screen_tiles.size());
-    }*/
-
     QImage image = m_image_screen.scaled(m_image_screen.width()*m_attribute_tab_zoom, m_image_screen.height()*m_attribute_tab_zoom);
     if (ui->checkBox_attribute_grid->isChecked())
     {
@@ -1268,7 +925,7 @@ void MainWindow::RedrawAttributeTab()
     s_attribute_tab_render->setPixmap(QPixmap::fromImage(image));
     s_attribute_tab_render->resize(image.width(), image.height());
     s_attribute_tab_render->setMaximumSize(image.width(), image.height());
-    s_attribute_tab_render->setMinimumSize(image.width(), image.height());
+    s_attribute_tab_render->setMinimumSize(image.width(), image.height());*/
 }
 
 void MainWindow::on_checkBox_attribute_grid_clicked()
@@ -1278,7 +935,11 @@ void MainWindow::on_checkBox_attribute_grid_clicked()
 
 void MainWindow::on_tabWidget_currentChanged(int)
 {
-    if (ui->tabWidget->currentWidget() == ui->tab_slice)
+    if (ui->tabWidget->currentWidget() == ui->tab_video)
+    {
+        VideoTab_FullUpdate();
+    }
+    if (ui->tabWidget->currentWidget() == ui->tab_audio)
     {
         RedrawAttributeTab();
     }
@@ -1308,7 +969,8 @@ void MainWindow::RedrawOamTab()
         return;
     ui->label_oam_couner->setText(QString("%1").arg(m_oam_vector.size()));
 
-    ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
+
+    /*ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
     int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
 
     QImage render(m_image_indexed.width(), m_image_indexed.height(), QImage::Format_ARGB32);
@@ -1443,7 +1105,7 @@ void MainWindow::RedrawOamTab()
     }
     s_oam_tab_render->setPixmap(QPixmap::fromImage(image));
     s_oam_tab_render->setMinimumSize(image.size());
-    s_oam_tab_render->setMaximumSize(image.size());
+    s_oam_tab_render->setMaximumSize(image.size());*/
 }
 
 void MainWindow::on_radioButton_oam_pal0_clicked()
@@ -1493,25 +1155,25 @@ void MainWindow::on_checkBox_oam_fill_any_color_clicked()
 void MainWindow::on_lineEdit_palette_color_count_editingFinished()
 {
     UpdateIndexedImage();
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 void MainWindow::on_checkBox_palette_deither_clicked()
 {
     UpdateIndexedImage();
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 void MainWindow::on_comboBox_palette_method_currentIndexChanged(int)
 {
     UpdateIndexedImage();
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 void MainWindow::on_checkBox_make_indexed_clicked()
 {
     UpdateIndexedImage();
-    RedrawPaletteTab();
+    VideoTab_Redraw();
 }
 
 
@@ -1536,4 +1198,5 @@ void MainWindow::on_radioButton_oam_draw_background_clicked()
 {
     RedrawOamTab();
 }
+
 
