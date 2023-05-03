@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QFile>
 #include <QMessageBox>
+#include <QDateTime>
 #include "picojson.h"
 
 static QLabel* s_palette_tab_render;
@@ -167,21 +168,25 @@ void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
             int r = color & 0xFF;
             int g = (color >> 8) & 0xFF;
             int b = (color >> 16) & 0xFF;
+            int a = (color >> 24) & 0xFF;
             int best_index = 0;
-            uint64_t best_diff = UINT64_MAX;
-            for (int c = 0; c < 16; ++c)
+            if (a > 128)
             {
-                if ( (int)(c & 3) == 0)
-                    continue;
-                uint32_t pcol = palette[m_palette_set[c >> 2].c[c & 3]];
-                int pr = pcol & 0xFF;
-                int pg = (pcol >> 8) & 0xFF;
-                int pb = (pcol >> 16) & 0xFF;
-                uint64_t diff = (r-pr)*(r-pr) + (g-pg)*(g-pg) + (b-pb)*(b-pb);
-                if (diff < best_diff)
+                uint64_t best_diff = UINT64_MAX;
+                for (int c = 0; c < 16; ++c)
                 {
-                    best_diff = diff;
-                    best_index = c;
+                    if ( (int)(c & 3) == 0)
+                        continue;
+                    uint32_t pcol = palette[m_palette_set[c >> 2].c[c & 3]];
+                    int pr = pcol & 0xFF;
+                    int pg = (pcol >> 8) & 0xFF;
+                    int pb = (pcol >> 16) & 0xFF;
+                    uint64_t diff = (r-pr)*(r-pr) + (g-pg)*(g-pg) + (b-pb)*(b-pb);
+                    if (diff < best_diff)
+                    {
+                        best_diff = diff;
+                        best_index = c;
+                    }
                 }
             }
             dest_ptr[x] = best_index;
@@ -421,6 +426,16 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 }
                 if (m_slice_selected != -1)
                 {
+                    ui->comboBox_slice_list->blockSignals(true);
+                    for (int i = 0; i < ui->comboBox_slice_list->count(); ++i)
+                    {
+                        if ( m_slice_vector[m_slice_selected].id == ui->comboBox_slice_list->itemData(i).toLongLong() )
+                        {
+                            ui->comboBox_slice_list->setCurrentIndex(i);
+                            break;
+                        }
+                    }
+                    ui->comboBox_slice_list->blockSignals(false);
                     ui->lineEdit_slice_name->setText(m_slice_vector[m_slice_selected].caption);
                     ui->lineEdit_slice_name->setEnabled(true);
                     RedrawSliceTab();
@@ -528,6 +543,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     m_slice_end_point.setY(y);
                     m_slice_start_point_active = false;
                     SliceArea area;
+                    area.id = QDateTime::currentMSecsSinceEpoch();
                     area.x = m_slice_start_point.x() < m_slice_end_point.x() ? m_slice_start_point.x() : m_slice_end_point.x();
                     area.y = m_slice_start_point.y() < m_slice_end_point.y() ? m_slice_start_point.y() : m_slice_end_point.y();
                     area.width = abs(m_slice_end_point.x() - m_slice_start_point.x());
@@ -548,7 +564,9 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                             break;
                     }
 
+                    ui->comboBox_slice_list->addItem(area.caption, QVariant(area.id));
                     m_slice_vector.push_back(area);
+                    m_slice_selected = m_slice_vector.size()-1;
                     RedrawSliceTab();
                 } else if (m_slice_selected != -1)
                 {
@@ -556,6 +574,13 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     //RedrawSliceTab();
                 }
             }
+        }
+
+        if (event->type() == QEvent::KeyPress)
+        {
+            QKeyEvent* key = static_cast<QKeyEvent*>(event);
+            if (key->key() == Qt::Key_Delete)
+                on_pushButton_slice_delete_clicked();
         }
     }
     if (object == s_oam_tab_render)
@@ -710,9 +735,25 @@ void MainWindow::on_pushButton_sprite_browse_clicked()
      if (file_name.isEmpty())
          return;
 
-     ui->lineEdit_sprite_image->setText(file_name);
+     if (!m_project_file_name.isEmpty())
+     {
+         QFileInfo info(m_project_file_name);
+         QDir project_dir(info.dir());
+         m_spriteset_file_name = project_dir.relativeFilePath(m_spriteset_file_name);
+     }
+
+     ui->lineEdit_sprite_image->setText(m_spriteset_file_name);
      m_spriteset_file_name = file_name;
-     m_spriteset_original.load(file_name);
+
+     QString img_name = m_spriteset_file_name;
+     if (!m_project_file_name.isEmpty())
+     {
+         QFileInfo info(m_project_file_name);
+         QDir project_dir(info.dir());
+         img_name = project_dir.absoluteFilePath(img_name);
+     }
+
+     m_spriteset_original.load(img_name);
      RedrawPaletteTab();
 }
 
@@ -899,15 +940,29 @@ void MainWindow::LoadProject(const QString &file_name)
     }
 
     m_spriteset_file_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["sprite_set"].get<std::string>().c_str()));
+    if (!m_project_file_name.isEmpty())
+    {
+        QFileInfo info(m_project_file_name);
+        QDir project_dir(info.dir());
+        m_spriteset_file_name = project_dir.relativeFilePath(m_spriteset_file_name);
+    }
+
     if (!m_spriteset_file_name.isEmpty())
     {
-        if (!m_spriteset_original.load(m_spriteset_file_name))
+        QString img_name = m_spriteset_file_name;
+        if (!m_project_file_name.isEmpty())
         {
-            QMessageBox::critical(0, "Error", "Can't load image: " + m_spriteset_file_name + ", " + file.errorString());
+            QFileInfo info(m_project_file_name);
+            QDir project_dir(info.dir());
+            img_name = project_dir.absoluteFilePath(img_name);
+        }
+        if (!m_spriteset_original.load(img_name))
+        {
+            QMessageBox::critical(0, "Error", "Can't load image: " + img_name + ", " + file.errorString());
             m_spriteset_file_name.clear();
         } else
         {
-            ui->lineEdit_sprite_image->setText(file_name);
+            ui->lineEdit_sprite_image->setText(m_spriteset_file_name);
         }
     }
 
@@ -933,6 +988,7 @@ void MainWindow::LoadProject(const QString &file_name)
         for (auto itt = items.begin(); itt != items.end(); ++itt)
         {
             SliceArea area;
+            area.id = m_slice_vector.size();
             area.x = (int)(itt->get<picojson::object>()["x"].get<double>());
             area.y = (int)(itt->get<picojson::object>()["y"].get<double>());
             area.width = (int)(itt->get<picojson::object>()["w"].get<double>());
@@ -954,6 +1010,12 @@ void MainWindow::LoadProject(const QString &file_name)
             }
             m_slice_vector.push_back(area);
         }
+
+        ui->comboBox_slice_list->blockSignals(true);
+        ui->comboBox_slice_list->clear();
+        for (size_t i = 0; i < m_slice_vector.size(); ++i)
+            ui->comboBox_slice_list->addItem(m_slice_vector[i].caption, QVariant(m_slice_vector[i].id));
+        ui->comboBox_slice_list->blockSignals(false);
     }
 
     m_slice_start_point_active = false;
@@ -969,6 +1031,16 @@ void MainWindow::RedrawSliceTab()
         return;
 
     QImage image = m_spriteset_original.scaled(m_spriteset_original.width()*m_slice_tab_zoom, m_spriteset_original.height()*m_slice_tab_zoom);
+
+    for (int y = 0; y < image.height(); ++y)
+    {
+        uint8_t* data = image.scanLine(y);
+        for (int x = 0; x < image.width(); ++x)
+        {
+            if (data[x*4 + 3] < 128)
+                *((uint32_t*)(data + x*4)) = m_bg_color;
+        }
+    }
 
     {
         QPainter painter(&image);
@@ -1263,5 +1335,35 @@ void MainWindow::on_checkBox_oam_fill_any_color_clicked()
         return;
     m_slice_vector[index].oam[m_oam_selected].mode = ui->checkBox_oam_fill_any_color->isChecked();
     RedrawOamTab();
+}
+
+
+void MainWindow::on_pushButton_slice_add_clicked()
+{
+}
+
+void MainWindow::on_pushButton_slice_delete_clicked()
+{
+    if (m_slice_selected < 0)
+        return;
+
+    m_slice_vector.erase(m_slice_vector.begin() + m_slice_selected);
+    ui->comboBox_slice_list->blockSignals(true);
+    ui->comboBox_slice_list->removeItem(m_slice_selected);
+    ui->comboBox_slice_list->blockSignals(false);
+
+    ui->lineEdit_slice_name->setText("");
+    ui->lineEdit_slice_name->setEnabled(false);
+
+    m_slice_selected = -1;
+    RedrawSliceTab();
+}
+
+void MainWindow::on_comboBox_slice_list_currentIndexChanged(int index)
+{
+    m_slice_selected = index;
+    ui->lineEdit_slice_name->setText(m_slice_vector[m_slice_selected].caption);
+    ui->lineEdit_slice_name->setEnabled(true);
+    RedrawSliceTab();
 }
 

@@ -56,6 +56,12 @@ private slots:
     void on_checkBox_oam_fill_any_color_clicked();
     void on_pushButton_export_test_clicked();
 
+    void on_pushButton_slice_add_clicked();
+
+    void on_comboBox_slice_list_currentIndexChanged(int index);
+
+    void on_pushButton_slice_delete_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;

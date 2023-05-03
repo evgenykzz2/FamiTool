@@ -20,6 +20,7 @@ struct OAM
 
 struct SliceArea
 {
+    int64_t id;
     int x;
     int y;
     int width;

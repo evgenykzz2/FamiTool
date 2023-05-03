@@ -29,6 +29,10 @@ public:
 
     void UpdateIndexedImage();
 
+    QImage VideoTab_MovieImage(int frame_number);
+    QImage VideoTab_CropImage(const QImage& original);
+    void VideoTab_BuildBlackFrame(std::shared_ptr<FrameImageCompilation>& build);
+    bool VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameImageCompilation>& build, int depth = 0);
     void VideoTab_Init();
     void VideoTab_FullUpdate();
     void VideoTab_Redraw();
@@ -83,11 +87,15 @@ private slots:
 
     void on_comboBox_frame_mode_currentIndexChanged(int index);
 
+    void on_pushButton_copy_palette_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
     std::shared_ptr<AviReader> m_avi_reader;
     std::map<int, FrameInfo> m_frame_info_map;
+    std::map<int, std::shared_ptr<FrameImageCompilation>> m_frame_build;
+
     std::vector<Tile> m_base_tile_vector;
     std::map<Tile, size_t> m_base_tile_map;
 
@@ -96,9 +104,9 @@ private:
     DialogPickFamiPalette m_pick_fami_palette_dialog;
     uint32_t m_pick_palette_cvt_color;
     QString m_movie_file_name;
-    QImage m_image_original;
-    QImage m_image_indexed;
-    QImage m_image_screen;
+    //QImage m_image_original;
+    //QImage m_image_indexed;
+    //QImage m_image_screen;
     std::vector<uint8_t> m_spriteset_index;
 
 

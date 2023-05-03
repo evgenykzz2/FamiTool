@@ -1,7 +1,9 @@
 #pragma once
 #include <QString>
+#include <QImage>
 #include <vector>
 #include <map>
+#include <QDateTime>
 
 enum EViewMode
 {
@@ -44,6 +46,17 @@ struct Tile
     }
 };
 
+struct FrameImageCompilation
+{
+    //QDateTime last_use_time;
+    //QImage movie;
+    //QImage crop;
+    QImage indexed;
+    QImage palette_convert;
+    QImage tile_convert;
+    QImage final;
+};
+
 struct FrameInfo
 {
     EFrameMode frame_mode;
@@ -53,6 +66,18 @@ struct FrameInfo
     int colors; //color count for indexing method
     std::vector<int> palette;
     std::map<uint32_t, int> color_map;
+    bool force_update;
+
+    FrameInfo() :
+        frame_mode(FrameMode_Skip),
+        indexed(false),
+        index_method(IndexMethod_DivQuantizer),
+        diether(false),
+        colors(4),
+        force_update(true)
+    {
+        palette.resize(16, 0x0F);
+    }
 };
 
 enum ECompression
