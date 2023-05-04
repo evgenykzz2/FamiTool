@@ -25,8 +25,10 @@ class FamiNsf
     };
     static uint8_t NsfMemoryRead(uint16_t addr);
     const void* m_nsf_data;
+    uint8_t m_song_number;
 public:
     FamiNsf();
     bool Load(const void* data, size_t data_size);
     bool Init(uint8_t song_number, uint8_t region); //1 for PAL, 0 for NTSC
+    bool PlayFrame();
 };

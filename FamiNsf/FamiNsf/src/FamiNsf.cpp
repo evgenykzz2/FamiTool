@@ -2,15 +2,19 @@
 #include "Registers.h"
 #include "Memory.h"
 #include "CPU_6502.h"
+#include "APU.h"
 #include <iostream>
 #include <iomanip>
+
+//NTSC 1789773  29780.5
+//PAL  1662607  33247.5
 
 #define DEBUG_PRINT
 
 FamiNsf::FamiNsf() : 
-    m_nsf_data(0)
-{
-}
+    m_nsf_data(0),
+    m_song_number(0xFF)
+{}
 
 bool FamiNsf::Load(const void* data, size_t data_size)
 {
@@ -103,10 +107,12 @@ bool FamiNsf::Init(uint8_t song_number, uint8_t region)
     const NsfHeader* header = (const NsfHeader*)m_nsf_data;
     if (song_number >= header->total_songs)
         return false;
+    m_song_number = song_number;
     //TODO region check
 
     Memory_Init();
     CPU_6502_Init();
+    APU_Init();
 
     memset(s_nes_ram, 0, sizeof(s_nes_ram));
     memset(s_nes_sram, 0, sizeof(s_nes_sram));
@@ -134,7 +140,21 @@ bool FamiNsf::Init(uint8_t song_number, uint8_t region)
 
     s_nes_regs.PC = header->address_init;
     s_nes_execution_finished = 0;
-    CPU_6502_Execute(600000);
+    CPU_6502_Execute(29780, false);
 
     return true;
+}
+
+bool FamiNsf::PlayFrame()
+{
+    if (m_nsf_data == 0)
+        return false;
+
+    const NsfHeader* header = (const NsfHeader*)m_nsf_data;
+    if (m_song_number >= header->total_songs)
+        return false;
+
+    s_nes_regs.PC = header->address_play;
+    s_nes_execution_finished = 0;
+    CPU_6502_Execute(29780, true);
 }

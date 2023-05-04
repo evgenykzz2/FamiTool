@@ -1,7 +1,7 @@
 #include "CPU_6502.h"
 #include "Memory.h"
 #include "Registers.h"
-//#include "APU.h"
+#include "APU.h"
 
 #ifndef WIN32
 #include <Arduino.h>
@@ -1611,7 +1611,7 @@ void CPU_6502_skip(int cycles)
     s_nes_cycles += cycles;
 }
 
-void CPU_6502_Execute(int run_cycles)
+void CPU_6502_Execute(int run_cycles, bool apu)
 {
   s_nes_frame_cycles += run_cycles;
   s_nes_cycles -= run_cycles;
@@ -1643,11 +1643,22 @@ void CPU_6502_Execute(int run_cycles)
     CPU_6502_Step();
     int elapsed = s_nes_cycles - start_cycle;
 
-    //APU_cpu_tick(elapsed);
+    if (apu)
+        APU_cpu_tick(elapsed);
     if (s_nes_execution_finished)
     {
         //s_nes_frame_cycles = 0;
         //s_nes_cycles = 0;
+        if (apu)
+        {
+            while (s_nes_cycles < 0)
+            {
+                int ticks = s_nes_cycles < -1024 ? 1024 : -s_nes_cycles;
+                APU_cpu_tick(ticks);
+                s_nes_cycles += ticks;
+            }
+        } else
+            s_nes_cycles = 0;
         return;
     }
   }

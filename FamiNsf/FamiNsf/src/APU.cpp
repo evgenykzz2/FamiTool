@@ -8,6 +8,8 @@
 #include "driver/i2s.h"
 
 static const i2s_port_t i2s_num = I2S_NUM_0; // i2s port number
+#else
+#include <stdio.h>
 #endif
 
 class AudioChannel
@@ -71,10 +73,11 @@ public:
     uint8_t sweep_negate;
     uint8_t sweep_shift_count;
 
-    uint16_t timer;
+    uint16_t timer; //setup timer
 
     uint8_t duty_clock;
     uint16_t timer_clock;
+    uint16_t output_smooth;
 
 public:
     Pulse()
@@ -92,52 +95,106 @@ public:
         timer = 0;
         duty_clock = 0;
         timer_clock = 0;
+        output_smooth = 0;
     }
 
     uint16_t ApuTick(uint16_t ticks) override
     {
-        while (ticks > 0 && timer > 0)
+#if 1
+        uint32_t output_summ = 0;
+        for (uint16_t tick = 0; tick < ticks; ++tick)
         {
-            if (ticks >= timer_clock)
+            if (timer_clock == 0)
             {
-                ticks -= timer_clock;
                 duty_clock = (duty_clock + 1) & 7;
-                need_update = true;
                 timer_clock = timer;
+                
+                if (timer < 8 || timer > 0x7ff || length_counter == 0)
+                    output_sample = 0;
+                else
+                {
+                    output_sample = g_pattern[duty_cycle * 8 + duty_clock];
+                    if (constant_volume)
+                        output_sample = (output_sample * volume) >> 4;
+                    else
+                    {
+                        //envelope
+                        output_sample = 0;//sample;
+                    }
+                    if (sweep_enable)
+                        output_sample = 0;//sample;
+                }
             }
             else
             {
-                timer_clock -= ticks;
-                break;
+                timer_clock--;
+                output_summ += output_sample;
             }
+        }
+        return output_summ / ticks;
+#elif 0
+        timer_clock += ticks;
+        while (timer_clock >= timer + 1)
+        {
+            timer_clock -= timer + 1;
+            duty_clock = (duty_clock + 1) & 7;
+            need_update = true;
         }
 
         if (need_update)
         {
-            if (timer < 8 || timer > 0x7ff)
+            if (timer < 8 || timer > 0x7ff || length_counter == 0)
             {
                 output_sample = 0;
             }
             else
+            {
                 output_sample = g_pattern[duty_cycle * 8 + duty_clock];
 
-            if (length_counter == 0)
+                if (constant_volume)
+                    output_sample = (output_sample * volume) >> 4;
+                else
+                {
+                    //envelope
+                    output_sample = 0;//sample;
+                }
+
+                if (sweep_enable)
+                    output_sample = 0;//sample;
+            }
+        }
+        return output_sample;
+#else
+        uint32_t output_summ = 0;
+        uint16_t output_cnt = 0;
+        timer_clock += ticks;
+        while (timer_clock >= timer + 1)
+        {
+            output_summ += output_sample * (timer + 1);
+            timer_clock -= timer + 1;
+            duty_clock = (duty_clock + 1) & 7;
+            if (timer < 8 || timer > 0x7ff || length_counter == 0)
+            {
                 output_sample = 0;
-
-
-            if (constant_volume)
-                output_sample = (output_sample * volume) >> 4;
+            }
             else
             {
-                //envelope
-                output_sample = 0;//sample;
+                output_sample = g_pattern[duty_cycle * 8 + duty_clock];
+
+                if (constant_volume)
+                    output_sample = (output_sample * volume) >> 4;
+                else
+                {
+                    //envelope
+                    output_sample = 0;//sample;
+                }
+
+                if (sweep_enable)
+                    output_sample = 0;//sample;
             }
-
-            if (sweep_enable)
-                output_sample = 0;//sample;
         }
-
-        return output_sample;
+        return output_summ / ticks;
+#endif
     }
 };
 
@@ -390,10 +447,10 @@ uint16_t Apu_ExtractSample(int cpu_ticks)
     sample += s_pulse[0].ApuTick(cpu_ticks);
   if ( (uint8_t)(s_channel_enable & 2) != 0 )
     sample += s_pulse[1].ApuTick(cpu_ticks);
-  if ( (uint8_t)(s_channel_enable & 4) != 0 )
-    sample += s_triangle.ApuTick(cpu_ticks);
-  if ( (uint8_t)(s_channel_enable & 8) != 0 )
-    sample += s_noise.ApuTick(cpu_ticks);
+  //if ( (uint8_t)(s_channel_enable & 4) != 0 )
+    //sample += s_triangle.ApuTick(cpu_ticks);
+  //if ( (uint8_t)(s_channel_enable & 8) != 0 )
+    //sample += s_noise.ApuTick(cpu_ticks);
 
       /*
       //SS5 Audio
@@ -440,6 +497,10 @@ int16_t s_apu_buffer[64];
 volatile uint8_t s_apu_pos_read = 0;
 volatile uint8_t s_apu_pos_write = 0;
 
+#ifdef WIN32
+FILE* s_file_dump = 0;
+#endif
+
 #ifndef WIN32
 //portMUX_TYPE s_apu_mutex = portMUX_INITIALIZER_UNLOCKED;
 #endif
@@ -459,6 +520,10 @@ uint8_t APU_pop_sample()
 
 void APU_Init()
 {
+#ifdef WIN32
+    fopen_s(&s_file_dump, "apu.bin", "wb");
+#endif
+
 #ifndef WIN32
   i2s_config_t i2s_config;
   memset(&i2s_config, 0, sizeof(i2s_config));
@@ -478,14 +543,31 @@ void APU_Init()
 #endif
 }
 
-int s_cpu_cycles_total = 0;
+static int s_cpu_cycles_total = 0;
+static int s_apu_tick_acc = 0;
 void APU_cpu_tick(int cycles)
 {
-  s_cpu_cycles_total += cycles;
+    //2 CPU cycles = 1 APU cycle
+    s_cpu_cycles_total += cycles;
+#if 1
+    s_apu_cycles += cycles * 7;   //261.0085625 (7*1789773 / 48000)
+    while (s_apu_cycles >= 261) //make 48000 loop
+    {
+        s_apu_cycles -= 261;
+        //calculate apu ticks
+        s_apu_tick_acc += 261;
+        int apu_cnt = s_apu_tick_acc / 14;
+        s_apu_tick_acc -= apu_cnt * 14;
+        int16_t vol = Apu_ExtractSample(apu_cnt);
+        if (s_file_dump)
+            fwrite(&vol, sizeof(vol), 1, s_file_dump);
+    }
+#else
   s_apu_cycles += cycles * 7;   //261.0085625
+  //s_apu_cycles += cycles * 1789773 / AUDIO_SAMPLE_RATE;   //261.0085625
   //int sample = (uint64_t)(s_apu_cycles * AUDIO_SAMPLE_RATE) / 1789773;
   //for (int i = s_apu_sample; i < sample; ++i)
-  if (s_apu_cycles >= 261)
+  while (s_apu_cycles >= 261)
   {
     s_apu_cycles -= 261;
     int16_t vol = Apu_ExtractSample(s_cpu_cycles_total >> 1);
@@ -502,8 +584,12 @@ void APU_cpu_tick(int cycles)
     }
     //portEXIT_CRITICAL_ISR(&s_apu_mutex);
 #else
+    if (s_file_dump)
+        fwrite(&vol, sizeof(vol), 1, s_file_dump);
 #endif
-  }
+    }
+#endif
+
   /*s_apu_sample = sample;
   if (s_apu_cycles >= 1789773)
   {
