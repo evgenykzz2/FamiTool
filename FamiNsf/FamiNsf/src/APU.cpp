@@ -51,7 +51,9 @@ static const uint16_t g_pattern[32] =
   SVOL_MAX, SVOL_MIN, SVOL_MIN, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX  //75
 };
 
-static const uint16_t g_noise_timer[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };    //NTSC
+static const uint16_t g_noise_timer[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };  //NTSC
+//static const uint16_t g_noise_timer[16] = { 4, 7, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };    //PAL
+
 
 static const uint8_t g_lengthtable[0x20]=
 {
@@ -455,7 +457,7 @@ static uint16_t ApuDoNoise(APU* apu, uint16_t ticks)
     {
         if (apu->noise_timer_tick == 0)
         {
-            apu->noise_timer_tick = g_noise_timer[apu->noise_period] - 1;
+            apu->noise_timer_tick = g_noise_timer[apu->noise_period] / 2;
             if (apu->noise_mode)
             {
                 uint16_t feedback = ((apu->noise_shift_register >> 8) & 1) ^ ((apu->noise_shift_register >> 14) & 1);
@@ -475,14 +477,15 @@ static uint16_t ApuDoNoise(APU* apu, uint16_t ticks)
                 apu->noise_output_sample = 0;
             else
             {
-                apu->noise_output_sample = (uint16_t)((apu->noise_shift_register >> 0xe) & 1) * 5000;  //*1024*8
                 if (apu->noise_constant_volume)
+                {
+                    apu->noise_output_sample = (uint16_t)((apu->noise_shift_register >> 0xe) & 1) * 5000;  //*1024*8
                     apu->noise_output_sample = (apu->noise_output_sample * apu->noise_volume) >> 4;
+                }
                 else
                 {
-                    //envelope
-                    apu->noise_output_sample = 0;
-                    //output_sample = 0;//output_sample;
+                    apu->noise_output_sample = (uint16_t)((apu->noise_shift_register >> 0xe) & 1) * 5000;  //*1024*8
+                    apu->noise_output_sample = (apu->noise_output_sample * apu->noise_envelope_counter) >> 4;
                 }
             }
             summ += apu->noise_output_sample;
@@ -568,6 +571,8 @@ void APU_write(APU* apu, uint16_t addr, uint8_t val)
         apu->noise_length_counter_halt = (val >> 5) & 0x1;
         apu->noise_constant_volume = (val >> 4) & 0x1;
         apu->noise_volume = val & 0xF;
+        apu->noise_envelope_div_period = val & 15;
+        apu->noise_envelope_loop = (val >> 5) & 1;
     break;
 
     case 0x400E:
@@ -576,7 +581,8 @@ void APU_write(APU* apu, uint16_t addr, uint8_t val)
     break;
 
     case 0x400F:
-        apu->noise_length_counter = g_lengthtable[val >> 3];
+        apu->noise_length_counter = g_lengthtable[(val >> 3) & 0x1F];
+        apu->noise_envelope_write = 1;
     break;
 
     case 0x4015:
@@ -630,6 +636,33 @@ static uint16_t Apu_ExtractSample(APU* apu, uint16_t cpu_ticks)
             if (apu->triangle_linear_counter > 0)
                 apu->triangle_linear_counter--;
             apu->triangle_counter_reload_flag = 0;
+        }
+
+        //Noise envelope
+        {
+            uint8_t divider = 1;
+            if (apu->noise_envelope_write)
+            {
+                apu->noise_envelope_write = 0;
+                apu->noise_envelope_counter = 15;
+                apu->noise_envelope_div = 0;
+            }
+            else
+            {
+                ++apu->noise_envelope_div;
+                if (apu->noise_envelope_div > apu->noise_envelope_div_period)
+                {
+                    divider ++;
+                    apu->noise_envelope_div = 0;
+                }
+            }
+            if (divider)
+            {
+                if (apu->noise_envelope_loop && apu->noise_envelope_counter == 0)
+                    apu->noise_envelope_counter = 15;
+                else if (apu->noise_envelope_counter > 0)
+                    --apu->noise_envelope_counter;
+            }
         }
     }
 

@@ -65,6 +65,12 @@ struct APU
     uint8_t noise_mode;
     uint8_t noise_period;
 
+    uint8_t noise_envelope_div_period;
+    uint8_t noise_envelope_loop;
+    uint8_t noise_envelope_write;
+    uint8_t noise_envelope_counter;
+    uint8_t noise_envelope_div;
+
     uint8_t noise_update;
     uint16_t noise_shift_register;
     uint16_t noise_timer_tick;
