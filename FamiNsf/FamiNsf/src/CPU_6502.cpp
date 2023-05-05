@@ -803,7 +803,7 @@ void CPU_6502_Init()
   s_nes_regs.U = 1;
 
   s_nes_cycles = 0;
-  s_nes_regs.PC = Memory_Read(0xFFFC) | ( Memory_Read(0xFFFD) << 8);
+  s_nes_regs.PC = 0;// Memory_Read(0xFFFC) | (Memory_Read(0xFFFD) << 8);
 #ifndef WIN32
   Serial.print("CPU_6502_Init PC=0x");
   Serial.println((int)s_nes_regs.PC, HEX);
@@ -1644,7 +1644,7 @@ void CPU_6502_Execute(int run_cycles, bool apu)
     int elapsed = s_nes_cycles - start_cycle;
 
     if (apu)
-        APU_cpu_tick(elapsed);
+        APU_cpu_tick(&s_apu, elapsed);
     if (s_nes_execution_finished)
     {
         //s_nes_frame_cycles = 0;
@@ -1654,7 +1654,7 @@ void CPU_6502_Execute(int run_cycles, bool apu)
             while (s_nes_cycles < 0)
             {
                 int ticks = s_nes_cycles < -1024 ? 1024 : -s_nes_cycles;
-                APU_cpu_tick(ticks);
+                APU_cpu_tick(&s_apu, ticks);
                 s_nes_cycles += ticks;
             }
         } else

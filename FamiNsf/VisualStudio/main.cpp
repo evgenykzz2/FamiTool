@@ -32,6 +32,7 @@ int main()
     FamiNsf nsf_player;
     nsf_player.Load(nsf.data(), nsf.size());
     nsf_player.Init(6, 0);
+    //nsf_player.Init(0, 0);
 
     //while (true)
     for (int i = 0; i < 60*60; ++i)

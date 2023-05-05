@@ -120,7 +120,7 @@ static void Write_APU_Reg(uint16_t addr, uint8_t val)
     //ppu_mem.fiq_state = val;
     //ppu_mem.fiq_cycles = NES_FIQ_PERIOD;
   } else
-    APU_write(addr, val);
+    APU_write(&s_apu, addr, val);
 }
 
 static uint8_t Read_PPU_Reg(uint16_t addr)

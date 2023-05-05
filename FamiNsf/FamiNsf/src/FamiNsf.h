@@ -1,8 +1,10 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 class FamiNsf
 {
+public:
     struct NsfHeader
     {
         char magic[4];
@@ -26,6 +28,9 @@ class FamiNsf
     static uint8_t NsfMemoryRead(uint16_t addr);
     const void* m_nsf_data;
     uint8_t m_song_number;
+#if defined(ESP8266)
+    NsfHeader m_header;
+#endif
 public:
     FamiNsf();
     bool Load(const void* data, size_t data_size);

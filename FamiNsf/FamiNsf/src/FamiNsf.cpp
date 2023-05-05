@@ -5,6 +5,7 @@
 #include "APU.h"
 #include <iostream>
 #include <iomanip>
+#include <cstring>
 
 //NTSC 1789773  29780.5
 //PAL  1662607  33247.5
@@ -29,7 +30,13 @@ bool FamiNsf::Load(const void* data, size_t data_size)
         return false;
     }
 
+#if defined(ESP8266)
+    for (size_t n = 0; n < sizeof(NsfHeader); ++n)
+        ((uint8_t*)(&m_header))[n] = pgm_read_byte((const uint8_t*)data + n);
+    const NsfHeader* header = &m_header;
+#elif defined(WIN32)
     const NsfHeader* header = (const NsfHeader*)data;
+#endif
     if (header->magic[0] != 'N' || header->magic[1] != 'E' || header->magic[2] != 'S' || header->magic[3] != 'M' ||
         header->magic2 != 0x1A)
     {
@@ -93,26 +100,45 @@ bool FamiNsf::Load(const void* data, size_t data_size)
 }
 
 static const void* s_nsf_memory = 0;
+#if defined(ESP8266)
+const FamiNsf::NsfHeader* s_nsf_header;
+#endif
 
 uint8_t FamiNsf::NsfMemoryRead(uint16_t addr)
 {
+#if defined(ESP8266)
+    return pgm_read_byte((const uint8_t*)s_nsf_memory + 0x80 + addr - s_nsf_header->address_load);
+#elif defined(WIN32)
     return ((const uint8_t*)s_nsf_memory)[0x80 + addr - ((const NsfHeader*)s_nsf_memory)->address_load];
+#endif
 }
 
 bool FamiNsf::Init(uint8_t song_number, uint8_t region)
 {
+    std::cout << "Init" << std::endl;
+#if defined(ESP8266)
+    const NsfHeader* header = &m_header;
+    s_nsf_header = header;
+#elif defined(WIN32)
     if (m_nsf_data == 0)
         return false;
-    
     const NsfHeader* header = (const NsfHeader*)m_nsf_data;
+#endif
+
     if (song_number >= header->total_songs)
+    {
+        std::cout << "Invalid song " << (int)song_number << " total songs=" << (int)header->total_songs << std::endl;
         return false;
+    }
     m_song_number = song_number;
     //TODO region check
 
+    std::cout << "Memory_Init" << std::endl;
     Memory_Init();
+    std::cout << "CPU_6502_Init" << std::endl;
     CPU_6502_Init();
-    APU_Init();
+    std::cout << "APU_Init" << std::endl;
+    APU_Init(&s_apu);
 
     memset(s_nes_ram, 0, sizeof(s_nes_ram));
     memset(s_nes_sram, 0, sizeof(s_nes_sram));
@@ -140,6 +166,8 @@ bool FamiNsf::Init(uint8_t song_number, uint8_t region)
 
     s_nes_regs.PC = header->address_init;
     s_nes_execution_finished = 0;
+
+    std::cout << "Init: CPU_6502_Execute" << std::endl;
     CPU_6502_Execute(29780, false);
 
     return true;
@@ -147,14 +175,19 @@ bool FamiNsf::Init(uint8_t song_number, uint8_t region)
 
 bool FamiNsf::PlayFrame()
 {
+#if defined(ESP8266)
+    const NsfHeader* header = &m_header;
+#elif defined(WIN32)
     if (m_nsf_data == 0)
         return false;
-
     const NsfHeader* header = (const NsfHeader*)m_nsf_data;
+#endif
+
     if (m_song_number >= header->total_songs)
         return false;
 
     s_nes_regs.PC = header->address_play;
     s_nes_execution_finished = 0;
     CPU_6502_Execute(29780, true);
+    return true;
 }

@@ -1,16 +1,22 @@
 #include "APU.h"
-
+#include <cstring>
 #define AUDIO_SAMPLE_RATE 48000
 
-#ifndef WIN32
-#include <Arduino.h>
-#include <driver/dac.h>
-#include "driver/i2s.h"
+#if defined(ESP8266)
+#include <I2S.h>
+#endif
 
-static const i2s_port_t i2s_num = I2S_NUM_0; // i2s port number
+#ifndef WIN32
+//#include <Arduino.h>
+//#include <driver/dac.h>
+//#include "driver/i2s.h"
+
+//static const i2s_port_t i2s_num = I2S_NUM_0; // i2s port number
 #else
 #include <stdio.h>
 #endif
+
+APU s_apu;
 
 class AudioChannel
 {
@@ -45,7 +51,7 @@ static const uint16_t g_pattern[32] =
   SVOL_MAX, SVOL_MIN, SVOL_MIN, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX  //75
 };
 
-static const uint16_t g_noise_timer[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
+static const uint16_t g_noise_timer[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };    //NTSC
 
 static const uint8_t g_lengthtable[0x20]=
 {
@@ -101,6 +107,13 @@ public:
     uint16_t ApuTick(uint16_t ticks) override
     {
 #if 1
+        if (timer < 8 || timer > 0x7ff || length_counter == 0
+            || (constant_volume && volume == 0))
+        {
+            output_sample = 0;
+            return 0;
+        }
+
         uint32_t output_summ = 0;
         for (uint16_t tick = 0; tick < ticks; ++tick)
         {
@@ -108,10 +121,6 @@ public:
             {
                 duty_clock = (duty_clock + 1) & 7;
                 timer_clock = timer;
-                
-                if (timer < 8 || timer > 0x7ff || length_counter == 0)
-                    output_sample = 0;
-                else
                 {
                     output_sample = g_pattern[duty_cycle * 8 + duty_clock];
                     if (constant_volume)
@@ -131,7 +140,7 @@ public:
                 output_summ += output_sample;
             }
         }
-        return output_summ / ticks;
+        return output_summ == 0 ? 0 : output_summ / ticks;
 #elif 0
         timer_clock += ticks;
         while (timer_clock >= timer + 1)
@@ -330,172 +339,343 @@ public:
     }
 };
 
-Pulse       s_pulse[2];
-Triangle    s_triangle;
-Noise       s_noise;
-uint8_t     s_channel_enable;
+//Pulse       s_pulse[2];
+//Triangle    s_triangle;
+//Noise       s_noise;
+//uint8_t     s_channel_enable;
 
-void APU_write(uint16_t addr, uint8_t val)
+static uint16_t ApuDoPulse(APU* apu, uint16_t ticks, uint8_t channel)
 {
-  switch(addr)
-  {
+    if (apu->pulse_timer[channel] < 8 || apu->pulse_timer[channel] > 0x7ff || apu->pulse_length_counter[channel] == 0
+        || (apu->pulse_constant_volume[channel] && apu->pulse_volume[channel] == 0))
+    {
+        apu->pulse_output_sample[channel] = 0;
+        return 0;
+    }
+
+    uint32_t output_summ = 0;
+    for (uint16_t tick = 0; tick < ticks; ++tick)
+    {
+        if (apu->pulse_timer_clock[channel] == 0)
+        {
+            apu->pulse_duty_clock[channel] = (apu->pulse_duty_clock[channel] + 1) & 7;
+            apu->pulse_timer_clock[channel] = apu->pulse_timer[channel];
+            if (apu->pulse_constant_volume[channel])
+            {
+                apu->pulse_output_sample[channel] = (g_pattern[apu->pulse_duty_cycle[channel] * 8 + apu->pulse_duty_clock[channel]] * apu->pulse_volume[channel]) >> 4;
+            } else
+            {
+                //envelope
+                apu->pulse_output_sample[channel] = (g_pattern[apu->pulse_duty_cycle[channel] * 8 + apu->pulse_duty_clock[channel]] * apu->pulse_envelope_counter[channel]) >> 4;
+            }
+        }
+        else
+        {
+            apu->pulse_timer_clock[channel]--;
+            output_summ += apu->pulse_output_sample[channel];
+        }
+    }
+    return output_summ == 0 ? 0 : output_summ / ticks;
+}
+
+static uint16_t ApuDoTriangle(APU* apu, uint16_t ticks)
+{
+#if 1
+    //static const uint16_t FILTER = 128;
+    if (apu->triangle_length_counter == 0 || apu->triangle_linear_counter == 0 || apu->triangle_timer < 2)
+    {
+        //apu->triangle_output_sample = 0;
+        //if (apu->triangle_volume_smooth == 0)
+            //return 0;
+        //apu->triangle_volume_smooth--;
+        //return (apu->triangle_output_sample * apu->triangle_volume_smooth) >> 9;
+        return apu->triangle_output_sample;
+        //apu->triangle_output_sample_filter = (apu->triangle_output_sample_filter * FILTER + (apu->triangle_output_sample * (256 - FILTER))) >> 8;
+        //return apu->triangle_output_sample_filter;
+    }
+
+    uint32_t summ = 0;
+    for (uint16_t t = 0; t < ticks; ++t)
+    {
+        if (apu->triangle_timer_clock == 0)
+        {
+            apu->triangle_sampler = (apu->triangle_sampler + 1) & 31;
+            apu->triangle_timer_clock = apu->triangle_timer;
+            apu->triangle_output_sample = g_triangle[apu->triangle_sampler];
+            summ += apu->triangle_output_sample;
+        }
+        else
+        {
+            apu->triangle_timer_clock--;
+            summ += apu->triangle_output_sample;
+        }
+    }
+    uint16_t avg = summ / ticks;
+    //if (apu->triangle_volume_smooth == 512)
+        return avg;
+    //else
+    {
+        //++apu->triangle_volume_smooth;
+        //return (avg * apu->triangle_volume_smooth) >> 9;
+    }
+    //apu->triangle_output_sample_filter = (apu->triangle_output_sample_filter * FILTER + (avg *(256-FILTER))) >> 8;
+    //return apu->triangle_output_sample_filter;
+
+#else
+    while (ticks > 0 && apu->triangle_timer > 0)
+    {
+        if (ticks >= apu->triangle_timer_clock)
+        {
+            ticks -= apu->triangle_timer_clock;
+            apu->triangle_sampler = (apu->triangle_sampler + 1) & 31;
+            apu->triangle_timer_clock = apu->triangle_timer;
+        }
+        else
+        {
+            apu->triangle_timer_clock -= ticks;
+            break;
+        }
+    }
+
+    if (apu->triangle_length_counter == 0 || apu->triangle_linear_counter == 0)
+        return 0;
+    else
+    {
+        if (apu->triangle_timer < 2)
+            return 0;
+        return g_triangle[apu->triangle_sampler];
+    }
+#endif
+}
+
+static uint16_t ApuDoNoise(APU* apu, uint16_t ticks)
+{
+    uint32_t summ = 0;
+    for (uint16_t t = 0; t < ticks; ++t)
+    {
+        if (apu->noise_timer_tick == 0)
+        {
+            apu->noise_timer_tick = g_noise_timer[apu->noise_period] - 1;
+            if (apu->noise_mode)
+            {
+                uint16_t feedback = ((apu->noise_shift_register >> 8) & 1) ^ ((apu->noise_shift_register >> 14) & 1);
+                apu->noise_shift_register = (apu->noise_shift_register << 1) + feedback;
+                apu->noise_shift_register &= 0x7fff;
+                //apu->noise_update = 1;
+            }
+            else
+            {
+                uint16_t feedback = ((apu->noise_shift_register >> 13) & 1) ^ ((apu->noise_shift_register >> 14) & 1);
+                apu->noise_shift_register = (apu->noise_shift_register << 1) + feedback;
+                apu->noise_shift_register &= 0x7fff;
+                //apu->noise_update = 1;
+            }
+
+            if (apu->noise_length_counter == 0)
+                apu->noise_output_sample = 0;
+            else
+            {
+                apu->noise_output_sample = (uint16_t)((apu->noise_shift_register >> 0xe) & 1) * 5000;  //*1024*8
+                if (apu->noise_constant_volume)
+                    apu->noise_output_sample = (apu->noise_output_sample * apu->noise_volume) >> 4;
+                else
+                {
+                    //envelope
+                    apu->noise_output_sample = 0;
+                    //output_sample = 0;//output_sample;
+                }
+            }
+            summ += apu->noise_output_sample;
+        } else
+        {
+            apu->noise_timer_tick--;
+            summ += apu->noise_output_sample;
+        }
+    }
+    return summ / ticks;
+}
+
+void APU_write(APU* apu, uint16_t addr, uint8_t val)
+{
+    switch(addr)
+    {
     //Pulse
-  case 0x4000:
-  case 0x4004:
+    case 0x4000:
+    case 0x4004:
     {
-      uint8_t n = (addr >> 2) & 1;
-      s_pulse[n].duty_cycle = (val >> 6) & 0x3;
-      s_pulse[n].length_counter_halt = (val >> 5) & 0x1;
-      s_pulse[n].constant_volume = (val >> 4) & 0x1;
-      s_pulse[n].volume = val & 0xF;
-      s_pulse[n].need_update = true;
+        uint8_t n = (addr >> 2) & 1;
+        apu->pulse_duty_cycle[n] = (val >> 6) & 0x3;
+        apu->pulse_length_counter_halt[n] = (val >> 5) & 0x1;
+        apu->pulse_constant_volume[n] = (val >> 4) & 0x1;
+        apu->pulse_volume[n] = val & 0xF;
+        //apu->pulse_update[n] = 1;
+        apu->pulse_envelope_loop[n] = (val >> 5) & 0x1;
+        apu->pulse_envelope_div_period[n] = val & 0xF;
     }
     break;
 
-  case 0x4001:
-  case 0x4005:
+    case 0x4001:
+    case 0x4005:
     {
-      uint8_t n = (addr >> 2) & 1;
-      s_pulse[n].sweep_enable = val >> 7;
-      s_pulse[n].sweep_divider_period = (val >> 4) & 7;
-      s_pulse[n].sweep_negate = (val >> 3) & 1;
-      s_pulse[n].sweep_shift_count = val & 7;
-      s_pulse[n].need_update = true;
+        uint8_t n = (addr >> 2) & 1;
+        apu->pulse_sweep_enable[n] = val >> 7;
+        apu->pulse_sweep_divider_period[n] = (val >> 4) & 7;
+        apu->pulse_sweep_negate[n] = (val >> 3) & 1;
+        apu->pulse_sweep_shift_count[n] = val & 7;
+        //apu->pulse_update[n] = 1;
+        apu->pulse_sweep_update[n] = 1;
     }
     break;
 
-  case 0x4002:
-  case 0x4006:
+    case 0x4002:
+    case 0x4006:
     {
-      uint8_t n = (addr >> 2) & 1;
-      s_pulse[n].timer = (uint16_t)val | (s_pulse[n].timer & 0xFF00);
-      s_pulse[n].need_update = true;
+        uint8_t n = (addr >> 2) & 1;
+        apu->pulse_timer[n] = (uint16_t)val | (apu->pulse_timer[n] & 0xFF00);
+        //apu->pulse_update[n] = 1;
     }
     break;
 
-  case 0x4003:
-  case 0x4007:
+    case 0x4003:
+    case 0x4007:
     {
-      uint8_t n = (addr >> 2) & 1;
-      s_pulse[n].timer = (s_pulse[n].timer & 0xFF) | ((val&7) << 8);
-      s_pulse[n].length_counter = g_lengthtable[(val >> 3) & 0x1F];
-      s_pulse[n].need_update = true;
+        uint8_t n = (addr >> 2) & 1;
+        apu->pulse_timer[n] = (apu->pulse_timer[n] & 0xFF) | ((val&7) << 8);
+        apu->pulse_length_counter[n] = g_lengthtable[(val >> 3) & 0x1F];
+        //apu->pulse_update[n] = 1;
+        apu->pulse_envelope_update[n] = 1;
     }
     break;
 
     //Triangle
-  case 0x4008:
-    s_triangle.length_counter_halt = (val >> 7) & 0x1;
-    s_triangle.linear_counter_load = val & 0x7F;
-    s_triangle.need_update = true;
+    case 0x4008:
+        apu->triangle_length_counter_halt = (val >> 7) & 0x1;
+        apu->triangle_linear_counter_load = val & 0x7F;
     break;
 
-  case 0x400A:
-    s_triangle.timer = (uint16_t)val | (s_triangle.timer & 0xFF00);
-    s_triangle.need_update = true;
+    case 0x400A:
+        apu->triangle_timer = (uint16_t)val | (apu->triangle_timer & 0xFF00);
     break;
 
-  case 0x400B:
-    s_triangle.timer = (s_triangle.timer & 0xFF) | ((val&7) << 8);
-    s_triangle.length_counter = g_lengthtable[(val >> 3) & 0x1F];
-    s_triangle.counter_reload_flag = 1;
-    s_triangle.need_update = true;
+    case 0x400B:
+        apu->triangle_timer = (apu->triangle_timer & 0xFF) | ((val&7) << 8);
+        apu->triangle_length_counter = g_lengthtable[(val >> 3) & 0x1F];
+        apu->triangle_counter_reload_flag = 1;
     break;
 
     //Noise
-  case 0x400C:
-    s_noise.length_counter_halt = (val >> 5) & 0x1;
-    s_noise.constant_volume = (val >> 4) & 0x1;
-    s_noise.volume = val & 0xF;
-    s_noise.need_update = true;
+    case 0x400C:
+        apu->noise_length_counter_halt = (val >> 5) & 0x1;
+        apu->noise_constant_volume = (val >> 4) & 0x1;
+        apu->noise_volume = val & 0xF;
     break;
 
-  case 0x400E:
-    s_noise.mode = (val >> 7) & 0x1;
-    s_noise.period = val & 0xF;
-    s_noise.need_update = true;
+    case 0x400E:
+        apu->noise_mode = (val >> 7) & 0x1;
+        apu->noise_period = val & 0xF;
     break;
 
-  case 0x400F:
-    s_noise.length_counter = g_lengthtable[val >> 3];
-    s_noise.need_update = true;
+    case 0x400F:
+        apu->noise_length_counter = g_lengthtable[val >> 3];
     break;
 
-  case 0x4015:
-    s_channel_enable = val;
+    case 0x4015:
+        apu->channel_enable = val;
     break;
-  }
+    }
 }
 
-static uint32_t s_frame_counter = 0;
-
-uint16_t Apu_ExtractSample(int cpu_ticks)
+static uint16_t Apu_ExtractSample(APU* apu, uint16_t cpu_ticks)
 {
-  //6502 Audio
-  s_frame_counter++;
-  if ( s_frame_counter >= AUDIO_SAMPLE_RATE / 120)
-  {
-    s_frame_counter = 0;
-    s_pulse[0].ApuFrameTick();
-    s_pulse[1].ApuFrameTick();
-    s_triangle.ApuFrameTick();
-    s_noise.ApuFrameTick();
-  }
-
-  uint16_t sample = 0;
-  if ( (uint8_t)(s_channel_enable & 1) != 0 )
-    sample += s_pulse[0].ApuTick(cpu_ticks);
-  if ( (uint8_t)(s_channel_enable & 2) != 0 )
-    sample += s_pulse[1].ApuTick(cpu_ticks);
-  //if ( (uint8_t)(s_channel_enable & 4) != 0 )
-    //sample += s_triangle.ApuTick(cpu_ticks);
-  //if ( (uint8_t)(s_channel_enable & 8) != 0 )
-    //sample += s_noise.ApuTick(cpu_ticks);
-
-      /*
-      //SS5 Audio
-      //1789773/(48000*16*2) = 1789773/1536000
-      m_ss5_tick_counter++;
-      uint64_t ss5t = m_ss5_tick_counter*1789773/(AUDIO_SAMPLE_RATE*16*2);
-      while (m_ss5_tick < ss5t)
-      {
-        for (int c = 0; c < 3; ++c)
+    apu->frames_counter_120Hz++;
+    if (apu->frames_counter_120Hz >= AUDIO_SAMPLE_RATE / 120)
+    {
+        apu->frames_counter_120Hz = 0;
+        for (uint8_t n = 0; n < 2; ++n)
         {
-          if (m_ss5_counter[c] == 0)
-          {
-            m_ss5_counter[c] = ((uint16_t)m_ss5_reg[c*2] | ((uint16_t)(m_ss5_reg[c*2+1] & 0x0F) << 8)) + 1;
-            m_ss5_value[c] ^= 1;
-          } else
-            m_ss5_counter[c] --;
+            if (apu->pulse_length_counter_halt[n] == 0 && apu->pulse_length_counter[n] > 0)
+                apu->pulse_length_counter[n]--;
+            if (apu->pulse_sweep_enable[n])
+            {
+                if (apu->pulse_sweep_divider[n] > 0)
+                    apu->pulse_sweep_divider[n]--;
+                if (apu->pulse_sweep_divider[n] == 0)
+                {
+                    apu->pulse_sweep_divider[n] = apu->pulse_sweep_divider_period[n] + 1;
+
+                    uint16_t shift = apu->pulse_timer[n] >> apu->pulse_sweep_shift_count[n];
+                    if (n == 0 && apu->pulse_sweep_negate[n])
+                        shift += 1;
+                    apu->pulse_sweep_timer[n] = apu->pulse_timer[n] + (apu->pulse_sweep_negate[n] ? -shift : shift);
+
+                    if (apu->pulse_timer[n] >= 8 && apu->pulse_sweep_timer[n] < 0x800 && apu->pulse_sweep_shift_count[n] != 0)
+                        apu->pulse_timer[n] = apu->pulse_sweep_timer[n] < 0 ? 0 : apu->pulse_sweep_timer[n];
+                }
+            }
+
+            if (apu->pulse_sweep_update[n])
+            {
+                apu->pulse_sweep_divider[n] = apu->pulse_sweep_divider_period[n] + 1;
+                apu->pulse_sweep_update[n] = 0;
+            }
         }
-        m_ss5_tick ++;
-      }
 
-      uint16_t ss5_mix = 0;
-      for (int c = 0; c < 3; ++c)
-      {
-        if (m_ss5_value[c] && (uint8_t)(m_ss5_counter[7] >> c & 1))
-          ss5_mix += m_ss5_reg[c+8] & 0x0F;
-      }
-      sample += ss5_mix << 10;
-      if (sample > INT16_MAX)
-        sample = INT16_MAX;
-      if (sample < INT16_MIN)
-        sample = INT16_MIN;*/
-  /*sample = sample/2 + INT16_MAX/2;
-  if (sample > INT16_MAX)
-    sample = INT16_MAX;
-  if (sample < INT16_MIN)
-    sample = INT16_MIN;*/
-  return sample;
+        //Triangle tick
+        if (apu->triangle_counter_reload_flag)
+            apu->triangle_linear_counter = apu->triangle_linear_counter_load;
+        if (apu->triangle_length_counter_halt == 0)
+        {
+            if (apu->triangle_length_counter > 0)
+                apu->triangle_length_counter--;
+            if (apu->triangle_linear_counter > 0)
+                apu->triangle_linear_counter--;
+            apu->triangle_counter_reload_flag = 0;
+        }
+    }
+
+    apu->frames_counter_240Hz++;
+    if (apu->frames_counter_240Hz >= AUDIO_SAMPLE_RATE / 240)
+    {
+        apu->frames_counter_240Hz = 0;
+        for (uint8_t n = 0; n < 2; ++n)
+        {
+            uint8_t divider = 0;
+            if (apu->pulse_envelope_update[n])
+            {
+                apu->pulse_envelope_update[n] = 0;
+                apu->pulse_envelope_counter[n] = 15;
+                apu->pulse_envelope_div[n] = 0;
+            }
+            else
+            {
+                apu->pulse_envelope_div[n] ++;
+                if (apu->pulse_envelope_div[n] > apu->pulse_envelope_div_period[n])
+                {
+                    divider ++;
+                    apu->pulse_envelope_div[n] = 0;
+                }
+            }
+            if (divider)
+            {
+                if (apu->pulse_envelope_loop[n] && apu->pulse_envelope_counter[n] == 0)
+                    apu->pulse_envelope_counter[n] = 15;
+                else if (apu->pulse_envelope_counter[n] > 0)
+                    apu->pulse_envelope_counter[n]--;
+            }
+        }
+    }
+
+    uint16_t sample = 0;
+    if ((uint8_t)(apu->channel_enable & 1) != 0)
+        sample += ApuDoPulse(apu, cpu_ticks, 0);
+    if ( (uint8_t)(apu->channel_enable & 2) != 0 )
+        sample += ApuDoPulse(apu, cpu_ticks, 1);
+    if ( (uint8_t)(apu->channel_enable & 4) != 0 )
+        sample += ApuDoTriangle(apu, cpu_ticks);
+    if ((uint8_t)(apu->channel_enable & 8) != 0)
+        sample += ApuDoNoise(apu, cpu_ticks);
+    return sample;
 }
-
-static int s_apu_cycles = 0;
-static int s_apu_sample = 0;
-
-int16_t s_apu_buffer[64];
-volatile uint8_t s_apu_pos_read = 0;
-volatile uint8_t s_apu_pos_write = 0;
 
 #ifdef WIN32
 FILE* s_file_dump = 0;
@@ -505,95 +685,78 @@ FILE* s_file_dump = 0;
 //portMUX_TYPE s_apu_mutex = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
-uint8_t APU_pop_sample()
+void APU_Init(APU* apu)
 {
-  uint8_t sample = 0;
-#ifndef WIN32
-  //portENTER_CRITICAL_ISR(&s_apu_mutex);
-  sample = s_apu_buffer[s_apu_pos_read & 63];
-  if (s_apu_pos_read < s_apu_pos_write)
-    s_apu_pos_read ++;
-  //portEXIT_CRITICAL_ISR(&s_apu_mutex);
-#endif
-  return sample;
-}
-
-void APU_Init()
-{
+    memset(apu, 0, sizeof(APU));
+    apu->pulse_sweep_divider[0] = 1;
+    apu->pulse_sweep_divider[1] = 1;
+    apu->noise_shift_register = 1;
 #ifdef WIN32
     fopen_s(&s_file_dump, "apu.bin", "wb");
 #endif
 
-#ifndef WIN32
-  i2s_config_t i2s_config;
-  memset(&i2s_config, 0, sizeof(i2s_config));
-  i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
-  i2s_config.sample_rate = AUDIO_SAMPLE_RATE;
-  i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT; /* the DAC module will only take the 8bits from MSB */
-  i2s_config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
-  i2s_config.communication_format = I2S_COMM_FORMAT_I2S_MSB;
-  i2s_config.intr_alloc_flags = 0; // default interrupt priority
-  i2s_config.dma_buf_count = 2;
-  i2s_config.dma_buf_len = 128;
-  i2s_config.use_apll = false;
+#if 0
+    i2s_config_t i2s_config;
+    memset(&i2s_config, 0, sizeof(i2s_config));
+    i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
+    i2s_config.sample_rate = AUDIO_SAMPLE_RATE;
+    i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT; /* the DAC module will only take the 8bits from MSB */
+    i2s_config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
+    i2s_config.communication_format = I2S_COMM_FORMAT_I2S_MSB;
+    i2s_config.intr_alloc_flags = 0; // default interrupt priority
+    i2s_config.dma_buf_count = 2;
+    i2s_config.dma_buf_len = 128;
+    i2s_config.use_apll = false;
 
-  i2s_driver_install(i2s_num, &i2s_config, 0, NULL);   //install and start i2s driver
-  i2s_set_pin(i2s_num, NULL); //for internal DAC, this will enable both of the internal channels
-  i2s_set_sample_rates(i2s_num, AUDIO_SAMPLE_RATE); //set sample rates
+    i2s_driver_install(i2s_num, &i2s_config, 0, NULL);   //install and start i2s driver
+    i2s_set_pin(i2s_num, NULL); //for internal DAC, this will enable both of the internal channels
+    i2s_set_sample_rates(i2s_num, AUDIO_SAMPLE_RATE); //set sample rates
 #endif
 }
 
-static int s_cpu_cycles_total = 0;
-static int s_apu_tick_acc = 0;
-void APU_cpu_tick(int cycles)
+#if defined(ESP8266)
+void ApuWriteDAC(uint16_t DAC)
 {
-    //2 CPU cycles = 1 APU cycle
-    s_cpu_cycles_total += cycles;
-#if 1
-    s_apu_cycles += cycles * 7;   //261.0085625 (7*1789773 / 48000)
-    while (s_apu_cycles >= 261) //make 48000 loop
+    uint16_t i2sACC = 0;
+    static uint16_t err = 0;
+    for (uint8_t i = 0; i < 32; i++)
     {
-        s_apu_cycles -= 261;
-        //calculate apu ticks
-        s_apu_tick_acc += 261;
-        int apu_cnt = s_apu_tick_acc / 14;
-        s_apu_tick_acc -= apu_cnt * 14;
-        int16_t vol = Apu_ExtractSample(apu_cnt);
-        if (s_file_dump)
-            fwrite(&vol, sizeof(vol), 1, s_file_dump);
+        i2sACC = i2sACC << 1;
+        if (DAC >= err)
+        {
+            i2sACC |= 1;
+            err += 0xFFFF - DAC;
+        }
+        else
+        {
+            err -= DAC;
+        }
     }
-#else
-  s_apu_cycles += cycles * 7;   //261.0085625
-  //s_apu_cycles += cycles * 1789773 / AUDIO_SAMPLE_RATE;   //261.0085625
-  //int sample = (uint64_t)(s_apu_cycles * AUDIO_SAMPLE_RATE) / 1789773;
-  //for (int i = s_apu_sample; i < sample; ++i)
-  while (s_apu_cycles >= 261)
-  {
-    s_apu_cycles -= 261;
-    int16_t vol = Apu_ExtractSample(s_cpu_cycles_total >> 1);
-    s_cpu_cycles_total = s_cpu_cycles_total & 1;
-#ifndef WIN32
-    //portENTER_CRITICAL_ISR(&s_apu_mutex);
-    s_apu_buffer[s_apu_pos_write & 63] = vol;
-    s_apu_pos_write ++;
-    if (s_apu_pos_write == 64)
-    {
-      s_apu_pos_write = 0;
-      size_t bytes_written;
-      i2s_write(i2s_num, s_apu_buffer, 128, &bytes_written, portMAX_DELAY);
-    }
-    //portEXIT_CRITICAL_ISR(&s_apu_mutex);
-#else
-    if (s_file_dump)
-        fwrite(&vol, sizeof(vol), 1, s_file_dump);
-#endif
-    }
+    i2s_write_sample(i2sACC);
+}
 #endif
 
-  /*s_apu_sample = sample;
-  if (s_apu_cycles >= 1789773)
-  {
-    s_apu_cycles -= 1789773;
-    s_apu_sample -= AUDIO_SAMPLE_RATE;
-  }*/
+void APU_cpu_tick(APU* apu, uint16_t cycles)
+{
+    //2 CPU cycles = 1 APU cycle
+    apu->cycles_count += cycles * 7;     //261.0085625 (7*1789773 / 48000)
+    while (apu->cycles_count >= 261)     //make 48000 loop
+    {
+        apu->cycles_count -= 261;
+        //calculate apu ticks
+        apu->cycles_acumulator += 261;
+        uint16_t apu_cnt = apu->cycles_acumulator / 14;
+        apu->cycles_acumulator -= apu_cnt * 14;
+        uint16_t vol = Apu_ExtractSample(apu, apu_cnt) * 2;
+        apu->output_filter = (apu->output_filter * (4096-32) + vol * 32) >> 12;
+
+        int16_t sample = (int16_t)(vol)-(int16_t)apu->output_filter;
+
+#if defined(ESP8266)
+		i2s_write_sample( (int32_t)sample | ((int32_t)sample << 16));
+#elif WIN32
+        if (s_file_dump)
+            fwrite(&sample, sizeof(sample), 1, s_file_dump);
+#endif
+    }
 }
