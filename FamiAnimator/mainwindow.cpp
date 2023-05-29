@@ -94,6 +94,11 @@ MainWindow::MainWindow(QWidget *parent)
     s_oam_tab_render->setMouseTracking(true);
     ui->scrollArea_OAM->installEventFilter(this);
     m_oam_selected = -1;
+
+    AnimationTab_Init();
+
+    connect(&m_frame_timer, SIGNAL(timeout()), this, SLOT(TimerFrame()));
+    m_frame_timer.start(1000 / 100);
 }
 
 MainWindow::~MainWindow()
@@ -214,6 +219,26 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
     }
 }
 
+void MainWindow::Index2ImageAlpha(const std::vector<uint8_t>& index, QImage &image, int width, int height)
+{
+    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
+    if (image.width() != width || image.height() != height)
+        image = QImage(width, height, QImage::Format_ARGB32);
+    for (int y = 0; y < height; ++y)
+    {
+        uchar* line_ptr = image.scanLine(y);
+        const uint8_t* index_ptr = index.data() + y*width;
+        for (int x = 0; x < width; ++x)
+        {
+            int c = index_ptr[x];
+            if (c == 0)
+                ((uint32_t*)line_ptr)[x] = 0x00000000;
+            else
+                ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
+        }
+    }
+}
+
 void MainWindow::RedrawPaletteTab()
 {
     if (m_spriteset_original.isNull())
@@ -221,6 +246,8 @@ void MainWindow::RedrawPaletteTab()
 
     Image2Index(m_spriteset_original, m_spriteset_index);
     Index2Image(m_spriteset_index, m_spriteset_indexed, m_spriteset_original.width(), m_spriteset_original.height());
+    Index2ImageAlpha(m_spriteset_index, m_spriteset_indexed_alpha, m_spriteset_original.width(), m_spriteset_original.height());
+
 
     QImage image;
     if (ui->checkBox_palette_draw_cvt->isChecked())
@@ -690,6 +717,12 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
     return QWidget::eventFilter( object, event );
 }
 
+void MainWindow::TimerFrame()
+{
+    if (ui->tabWidget->currentWidget() == ui->tab_Animation)
+        AnimationTab_FrameTick();
+}
+
 void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
 {
     m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3] = index;
@@ -871,6 +904,49 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["slice_area"] = picojson::value(items);
     }
 
+
+    {
+        picojson::array items = picojson::array();
+        for (size_t n = 0; n < m_animation.size(); ++n)
+        {
+            picojson::object item_obj;
+            item_obj["name"] = picojson::value( m_animation[n].name.toUtf8().toBase64().data() );
+            item_obj["loop"] = picojson::value( m_animation[n].loop );
+            if (!m_animation[n].frames.empty())
+            {
+                picojson::array frames = picojson::array();
+                for (size_t i = 0; i < m_animation[n].frames.size(); ++i)
+                {
+                    picojson::object frame_obj;
+                    frame_obj["name"] = picojson::value( m_animation[n].frames[i].name.toUtf8().toBase64().data() );
+                    frame_obj["x"] = picojson::value( (double)m_animation[n].frames[i].x );
+                    frame_obj["y"] = picojson::value( (double)m_animation[n].frames[i].y );
+
+                    frame_obj["duration_ms"] = picojson::value( (double)m_animation[n].frames[i].duration_ms );
+                    frame_obj["bound_box_x"] = picojson::value( (double)m_animation[n].frames[i].bound_box_x );
+                    frame_obj["bound_box_y"] = picojson::value( (double)m_animation[n].frames[i].bound_box_y );
+                    frame_obj["bound_box_width"] = picojson::value( (double)m_animation[n].frames[i].bound_box_width );
+                    frame_obj["bound_box_height"] = picojson::value( (double)m_animation[n].frames[i].bound_box_height );
+
+                    frame_obj["lock_movement"] = picojson::value( m_animation[n].frames[i].lock_movement );
+                    frame_obj["lock_direction"] = picojson::value( m_animation[n].frames[i].lock_direction );
+                    frame_obj["lock_attack"] = picojson::value( m_animation[n].frames[i].lock_attack );
+                    frame_obj["damage_box"] = picojson::value( m_animation[n].frames[i].damage_box );
+
+                    frame_obj["damage_box_x"] = picojson::value( (double)m_animation[n].frames[i].damage_box_x );
+                    frame_obj["damage_box_y"] = picojson::value( (double)m_animation[n].frames[i].damage_box_y );
+                    frame_obj["damage_box_width"] = picojson::value( (double)m_animation[n].frames[i].damage_box_width );
+                    frame_obj["damage_box_height"] = picojson::value( (double)m_animation[n].frames[i].damage_box_height );
+
+                    frames.push_back(picojson::value(frame_obj));
+                }
+                item_obj["frames"] = picojson::value(frames);
+            }
+            items.push_back(picojson::value(item_obj));
+        }
+        json.get<picojson::object>()["animation"] = picojson::value(items);
+    }
+
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
     file.open(QFile::WriteOnly);
@@ -1018,11 +1094,56 @@ void MainWindow::LoadProject(const QString &file_name)
         ui->comboBox_slice_list->blockSignals(false);
     }
 
+    m_animation.clear();
+    if (json.contains("animation"))
+    {
+        picojson::array items = json.get<picojson::object>()["animation"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
+        {
+            Animation animation;
+            animation.name = QString::fromUtf8( QByteArray::fromBase64(itt->get<picojson::object>()["name"].get<std::string>().c_str()));
+            animation.loop = itt->get<picojson::object>()["loop"].get<bool>();
+
+            if (itt->contains("frames"))
+            {
+                picojson::array frames = itt->get<picojson::object>()["frames"].get<picojson::array>();
+                for (auto frame_itt = frames.begin(); frame_itt != frames.end(); ++frame_itt)
+                {
+                    AnimationFrame frame;
+                    frame.name = QString::fromUtf8( QByteArray::fromBase64(frame_itt->get<picojson::object>()["name"].get<std::string>().c_str()));
+                    frame.x = (int)(frame_itt->get<picojson::object>()["x"].get<double>());
+                    frame.y = (int)(frame_itt->get<picojson::object>()["y"].get<double>());
+
+                    frame.duration_ms = (int)(frame_itt->get<picojson::object>()["duration_ms"].get<double>());
+                    frame.bound_box_x = (int)(frame_itt->get<picojson::object>()["bound_box_x"].get<double>());
+                    frame.bound_box_y = (int)(frame_itt->get<picojson::object>()["bound_box_y"].get<double>());
+                    frame.bound_box_width = (int)(frame_itt->get<picojson::object>()["bound_box_width"].get<double>());
+                    frame.bound_box_height = (int)(frame_itt->get<picojson::object>()["bound_box_height"].get<double>());
+
+                    frame.lock_movement = frame_itt->get<picojson::object>()["lock_movement"].get<bool>();
+                    frame.lock_direction = frame_itt->get<picojson::object>()["lock_direction"].get<bool>();
+                    frame.lock_attack = frame_itt->get<picojson::object>()["lock_attack"].get<bool>();
+                    frame.damage_box = frame_itt->get<picojson::object>()["damage_box"].get<bool>();
+
+                    frame.damage_box_x = (int)(frame_itt->get<picojson::object>()["damage_box_x"].get<double>());
+                    frame.damage_box_y = (int)(frame_itt->get<picojson::object>()["damage_box_y"].get<double>());
+                    frame.damage_box_width = (int)(frame_itt->get<picojson::object>()["damage_box_width"].get<double>());
+                    frame.damage_box_height = (int)(frame_itt->get<picojson::object>()["damage_box_height"].get<double>());
+
+                    animation.frames.push_back(frame);
+                }
+            }
+            m_animation.push_back(animation);
+        }
+    }
+
+
     m_slice_start_point_active = false;
     m_slice_selected = -1;
     on_comboBox_palette_mode_currentIndexChanged(palette_mode);
     RedrawSliceTab();
     FullUpdateOamTab();
+    AnimationTab_Reload();
 }
 
 void MainWindow::RedrawSliceTab()
@@ -1113,6 +1234,10 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_OAM)
     {
         FullUpdateOamTab();
+    }
+    if (ui->tabWidget->currentWidget() == ui->tab_Animation)
+    {
+        AnimationTab_Reload();
     }
 }
 

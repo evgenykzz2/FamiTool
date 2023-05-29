@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>993</width>
-    <height>639</height>
+    <width>872</width>
+    <height>635</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>4</number>
       </property>
       <widget class="QWidget" name="tab_general">
        <attribute name="title">
@@ -723,8 +723,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>616</width>
+             <height>525</height>
             </rect>
            </property>
           </widget>
@@ -839,8 +839,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>616</width>
+             <height>525</height>
             </rect>
            </property>
           </widget>
@@ -935,8 +935,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>616</width>
+             <height>525</height>
             </rect>
            </property>
           </widget>
@@ -1043,6 +1043,292 @@
        <attribute name="title">
         <string>Animation</string>
        </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_14" stretch="3,1">
+        <item>
+         <widget class="QScrollArea" name="scrollArea_Animation">
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="scrollAreaWidgetContents_4">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>616</width>
+             <height>525</height>
+            </rect>
+           </property>
+          </widget>
+         </widget>
+        </item>
+        <item>
+         <widget class="QWidget" name="widget_2" native="true">
+          <layout class="QVBoxLayout" name="verticalLayout_5">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QComboBox" name="combo_animation"/>
+           </item>
+           <item>
+            <widget class="Line" name="line_10">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_15">
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QPushButton" name="btn_animation_add">
+               <property name="text">
+                <string>Add</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_animation_delete">
+               <property name="text">
+                <string>Delete</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="Line" name="line_11">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QFormLayout" name="formLayout">
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_12">
+               <property name="text">
+                <string>Name</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="edit_animation_name"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_13">
+               <property name="text">
+                <string>Frames</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLineEdit" name="edit_animation_frames"/>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_14">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QCheckBox" name="check_animation_loop">
+               <property name="text">
+                <string>Loop</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_16">
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QPushButton" name="btn_animation_play">
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="resources.qrc">
+                 <normaloff>:/res/resource/play.png</normaloff>:/res/resource/play.png</iconset>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_animation_frame">
+               <property name="text">
+                <string>0</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="slider_animation_frame">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="Line" name="line_12">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QFormLayout" name="formLayout_2">
+             <property name="horizontalSpacing">
+              <number>6</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item row="3" column="1">
+              <widget class="QLineEdit" name="edit_frame_duration"/>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_15">
+               <property name="text">
+                <string>Duration</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QCheckBox" name="check_frame_lock_movement">
+               <property name="text">
+                <string>Lock Movement</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QCheckBox" name="check_frame_lock_direction">
+               <property name="text">
+                <string>Lock Direction</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="1">
+              <widget class="QCheckBox" name="check_frame_lock_attack">
+               <property name="text">
+                <string>Lock attack</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="label_17">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <widget class="QLabel" name="label_18">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="0">
+              <widget class="QLabel" name="label_19">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="0">
+              <widget class="QLabel" name="label_21">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="1">
+              <widget class="QCheckBox" name="check_frame_damage_box">
+               <property name="text">
+                <string>Damage Box</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLineEdit" name="edit_frame_y"/>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLineEdit" name="edit_frame_x"/>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_20">
+               <property name="text">
+                <string>X:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_22">
+               <property name="text">
+                <string>Y:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="combo_animation_slice"/>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_23">
+               <property name="text">
+                <string>Slice</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_5">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </widget>
       <widget class="QWidget" name="tab_export">
        <attribute name="title">
@@ -1071,7 +1357,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>993</width>
+     <width>872</width>
      <height>22</height>
     </rect>
    </property>
@@ -1108,6 +1394,8 @@
    </property>
   </action>
  </widget>
- <resources/>
+ <resources>
+  <include location="resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

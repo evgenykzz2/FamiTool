@@ -51,8 +51,8 @@ static const uint16_t g_pattern[32] =
   SVOL_MAX, SVOL_MIN, SVOL_MIN, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX, SVOL_MAX  //75
 };
 
-static const uint16_t g_noise_timer[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };  //NTSC
-//static const uint16_t g_noise_timer[16] = { 4, 7, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };    //PAL
+static const uint16_t g_noise_timer_ntsc[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };  //NTSC
+//static const uint16_t g_noise_timer_pal[16] = { 4, 7, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };    //PAL
 
 
 static const uint8_t g_lengthtable[0x20]=
@@ -305,7 +305,7 @@ public:
     {
         if (timer_tick == 0)
         {
-            timer_tick = g_noise_timer[period] / 32;
+            timer_tick = g_noise_timer_ntsc[period] / 32;
             if (mode)
             {
                 uint16_t feedback = ((shift_register >> 8) & 1) ^ ((shift_register >> 14) & 1);
@@ -383,18 +383,8 @@ static uint16_t ApuDoPulse(APU* apu, uint16_t ticks, uint8_t channel)
 static uint16_t ApuDoTriangle(APU* apu, uint16_t ticks)
 {
 #if 1
-    //static const uint16_t FILTER = 128;
     if (apu->triangle_length_counter == 0 || apu->triangle_linear_counter == 0 || apu->triangle_timer < 2)
-    {
-        //apu->triangle_output_sample = 0;
-        //if (apu->triangle_volume_smooth == 0)
-            //return 0;
-        //apu->triangle_volume_smooth--;
-        //return (apu->triangle_output_sample * apu->triangle_volume_smooth) >> 9;
         return apu->triangle_output_sample;
-        //apu->triangle_output_sample_filter = (apu->triangle_output_sample_filter * FILTER + (apu->triangle_output_sample * (256 - FILTER))) >> 8;
-        //return apu->triangle_output_sample_filter;
-    }
 
     uint32_t summ = 0;
     for (uint16_t t = 0; t < ticks; ++t)
@@ -413,16 +403,7 @@ static uint16_t ApuDoTriangle(APU* apu, uint16_t ticks)
         }
     }
     uint16_t avg = summ / ticks;
-    //if (apu->triangle_volume_smooth == 512)
-        return avg;
-    //else
-    {
-        //++apu->triangle_volume_smooth;
-        //return (avg * apu->triangle_volume_smooth) >> 9;
-    }
-    //apu->triangle_output_sample_filter = (apu->triangle_output_sample_filter * FILTER + (avg *(256-FILTER))) >> 8;
-    //return apu->triangle_output_sample_filter;
-
+    return avg;
 #else
     while (ticks > 0 && apu->triangle_timer > 0)
     {
@@ -452,12 +433,20 @@ static uint16_t ApuDoTriangle(APU* apu, uint16_t ticks)
 
 static uint16_t ApuDoNoise(APU* apu, uint16_t ticks)
 {
+    if (apu->noise_length_counter == 0 ||
+        (apu->noise_constant_volume != 0 && apu->noise_volume == 0) ||
+        (apu->noise_constant_volume == 0 && apu->noise_envelope_counter == 0) )
+    {
+        apu->noise_output_sample = 0;
+        return 0;
+    }
+
     uint32_t summ = 0;
     for (uint16_t t = 0; t < ticks; ++t)
     {
         if (apu->noise_timer_tick == 0)
         {
-            apu->noise_timer_tick = g_noise_timer[apu->noise_period] / 2;
+            apu->noise_timer_tick = g_noise_timer_ntsc[apu->noise_period] / 2;
             if (apu->noise_mode)
             {
                 uint16_t feedback = ((apu->noise_shift_register >> 8) & 1) ^ ((apu->noise_shift_register >> 14) & 1);

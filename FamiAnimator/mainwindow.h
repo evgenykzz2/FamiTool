@@ -3,8 +3,11 @@
 
 #include <QMainWindow>
 #include <QLabel>
+#include <QTimer>
+#include <QElapsedTimer>
 #include "Palette.h"
 #include "Sprite.h"
+#include "Animation.h"
 #include "dialogpickpalette.h"
 #include "dialogPickFamiPalette.h"
 #include <sstream>
@@ -24,8 +27,15 @@ public:
     void RedrawPaletteTab();
     void Image2Index(const QImage &image, std::vector<uint8_t>& index);
     void Index2Image(const std::vector<uint8_t>& index, QImage &image, int width, int height);
+    void Index2ImageAlpha(const std::vector<uint8_t>& index, QImage &image, int width, int height);
     void SaveProject(const QString &file_name);
     void LoadProject(const QString &file_name);
+
+    void AnimationTab_Init();
+    void AnimationTab_Reload();
+    void AnimationTab_UpdateFrame();
+    void AnimationTab_Redraw();
+    void AnimationTab_FrameTick();
 
     void RedrawSliceTab();
     void RedrawOamTab();
@@ -35,6 +45,7 @@ public:
 protected:
     virtual bool eventFilter(QObject* object, QEvent* event);
 private slots:
+    void TimerFrame();
     void on_comboBox_palette_mode_currentIndexChanged(int index);
     void PaletteWindow_Slot_PaletteSelect(int index);
     void PaletteWindow_Slot_BgPaletteSelect(int index);
@@ -55,12 +66,25 @@ private slots:
     void on_radioButton_oam_pal3_clicked();
     void on_checkBox_oam_fill_any_color_clicked();
     void on_pushButton_export_test_clicked();
-
     void on_pushButton_slice_add_clicked();
-
     void on_comboBox_slice_list_currentIndexChanged(int index);
-
     void on_pushButton_slice_delete_clicked();
+    void on_combo_animation_currentIndexChanged(int index);
+    void on_btn_animation_add_clicked();
+    void on_btn_animation_delete_clicked();
+    void on_edit_animation_name_editingFinished();
+    void on_edit_animation_frames_editingFinished();
+    void on_check_animation_loop_clicked();
+    void on_slider_animation_frame_valueChanged(int value);
+    void on_combo_animation_slice_currentIndexChanged(int index);
+    void on_edit_frame_x_editingFinished();
+    void on_edit_frame_y_editingFinished();
+    void on_edit_frame_duration_editingFinished();
+    void on_check_frame_lock_movement_clicked();
+    void on_check_frame_lock_direction_clicked();
+    void on_check_frame_lock_attack_clicked();
+    void on_check_frame_damage_box_clicked();
+    void on_btn_animation_play_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -71,6 +95,9 @@ private:
     int      m_bg_color_index;
     uint32_t m_bg_color;
 
+    QTimer m_frame_timer;
+    QElapsedTimer m_elapsed_timer;
+
     int      m_pick_pallete_index;
     DialogPickPalette m_pick_color_dialog;
     DialogPickFamiPalette m_pick_fami_palette_dialog;
@@ -79,6 +106,7 @@ private:
     QString m_spriteset_file_name;
     QImage m_spriteset_original;
     QImage m_spriteset_indexed;
+    QImage m_spriteset_indexed_alpha;
     std::vector<uint8_t> m_spriteset_index;
     int    m_palette_tab_zoom;
 
@@ -94,5 +122,7 @@ private:
     QString m_oam_slice_last;
     int m_oam_selected;
     QPoint m_oam_start_point;
+
+    std::vector<Animation> m_animation;
 };
 #endif // MAINWINDOW_H
