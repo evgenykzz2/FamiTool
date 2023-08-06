@@ -32,6 +32,7 @@ struct OAM
     int palette;
     int mode;
     std::vector<uint8_t> chr_export;  //Raw chr, can duplicate chr
+    std::vector<uint8_t> chr_export_blink;
 };
 
 struct SliceArea

@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <qdebug.h>
 
 struct Entry
 {
@@ -164,6 +165,25 @@ std::vector<uint8_t> RlePack(const std::vector<uint8_t>& buffer, bool rle4)
     return result;
 }
 
+static void PrintBuffer(std::stringstream &stream, std::vector<uint8_t>& buffer)
+{
+    int pos = 0;
+    for (size_t n = 0; n < buffer.size(); ++n)
+    {
+        if (pos >= 16)
+        {
+            stream << std::endl;
+            pos = 0;
+        }
+        if (pos == 0)
+            stream << "    .db ";
+        else
+            stream << ", ";
+        stream << "$" << std::hex << std::setw(2) << std::setfill('0') << ((int)(buffer[n] & 0xFF));
+        pos ++;
+    }
+}
+
 void MainWindow::on_pushButton_export_clicked()
 {
     QString file_name = QFileDialog::getSaveFileName(this, "Asm include file", QDir::currentPath(), "*.inc");
@@ -171,9 +191,12 @@ void MainWindow::on_pushButton_export_clicked()
         return;
 
     RedrawAttributeTab();
+    RedrawOamTab();
 
     ECompression compresion = (ECompression)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt();
     EChrAlign align = (EChrAlign)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt();
+
+    ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
 
     if (m_screen_tiles.size() != 32*30*16 ||
         m_screen_attribute.size() != 16*16)
@@ -254,24 +277,61 @@ void MainWindow::on_pushButton_export_clicked()
         nametable = rle;
     }
 
+    std::vector<uint8_t> oam_raw;
+    std::vector<uint8_t> oam_chr;
+    std::vector<uint8_t> oam_chr_blink;
+    if (!m_oam_vector.empty())
+    {
+        for (size_t n = 0; n < m_oam_vector.size(); ++n)
+        {
+            oam_raw.push_back(m_oam_vector[n].y);   //Y
+            if (sprite_mode == SpriteMode_8x8)
+                oam_raw.push_back(n); //Index
+            else
+                oam_raw.push_back(n*2); //Index
+            oam_raw.push_back(m_oam_vector[n].palette);   //flags (VHp000PP) p=priority(0=front, 1=back)
+            oam_raw.push_back(m_oam_vector[n].x);   //X
+
+            //qDebug() << m_oam_vector[n].chr_export.size();
+            oam_chr.insert(oam_chr.end(), m_oam_vector[n].chr_export.begin(), m_oam_vector[n].chr_export.end());
+            if (ui->checkBox_two_frames_blinking->isChecked())
+                oam_chr_blink.insert(oam_chr_blink.end(), m_oam_vector[n].chr_export_blink.begin(), m_oam_vector[n].chr_export_blink.end());
+        }
+    }
+
+    std::vector<uint8_t> palette_raw;
+    {
+        for (int p = 0; p < 4; ++p)
+        {
+            palette_raw.push_back(m_palette_set[p].c[0]);
+            palette_raw.push_back(m_palette_set[p].c[1]);
+            palette_raw.push_back(m_palette_set[p].c[2]);
+            palette_raw.push_back(m_palette_set[p].c[3]);
+        }
+        for (int p = 0; p < 4; ++p)
+        {
+            palette_raw.push_back(m_palette_sprite[p].c[0]);
+            palette_raw.push_back(m_palette_sprite[p].c[1]);
+            palette_raw.push_back(m_palette_sprite[p].c[2]);
+            palette_raw.push_back(m_palette_sprite[p].c[3]);
+        }
+    }
+
     {
         std::stringstream stream;
         stream << ui->lineEdit_name->text().toStdString() << ":  ;" << std::dec << nametable.size() << " bytes" << std::endl;
-        int pos = 0;
-        for (size_t n = 0; n < nametable.size(); ++n)
+        PrintBuffer(stream, nametable);
+
+        if (!oam_raw.empty())
         {
-            if (pos >= 16)
-            {
-                stream << std::endl;
-                pos = 0;
-            }
-            if (pos == 0)
-                stream << "    .db ";
-            else
-                stream << ", ";
-            stream << "$" << std::hex << std::setw(2) << std::setfill('0') << ((int)(nametable[n] & 0xFF));
-            pos ++;
+            stream << std::endl;
+            stream << ui->lineEdit_name->text().toStdString() << "_oam:  ;" << std::dec << oam_raw.size() << " bytes" << std::endl;
+            PrintBuffer(stream, oam_raw);
         }
+
+        stream << std::endl;
+        stream << ui->lineEdit_name->text().toStdString() << "_palette:  ;" << std::dec << palette_raw.size() << " bytes" << std::endl;
+        PrintBuffer(stream, palette_raw);
 
         QFile file(file_name);
         file.open(QFile::WriteOnly);
@@ -298,6 +358,13 @@ void MainWindow::on_pushButton_export_clicked()
         tile_vector.resize((tile_vector.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
         if (ui->checkBox_two_frames_blinking->isChecked())
             tile_vector_blink.resize((tile_vector_blink.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+
+        if (!oam_chr.empty())
+        {
+            oam_chr.resize((oam_chr.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+            if (ui->checkBox_two_frames_blinking->isChecked())
+                oam_chr_blink.resize((oam_chr_blink.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+        }
     }
 
     {
@@ -306,6 +373,12 @@ void MainWindow::on_pushButton_export_clicked()
         file.write((const char*)tile_vector.data(), tile_vector.size());
         if (ui->checkBox_two_frames_blinking->isChecked())
             file.write((const char*)tile_vector_blink.data(), tile_vector_blink.size());
+        if (!oam_chr.empty())
+        {
+            file.write((const char*)oam_chr.data(), oam_chr.size());
+            if (ui->checkBox_two_frames_blinking->isChecked())
+                file.write((const char*)oam_chr_blink.data(), oam_chr_blink.size());
+        }
         file.close();
     }
 

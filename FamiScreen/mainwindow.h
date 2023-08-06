@@ -23,6 +23,7 @@ public:
 
     void UpdateIndexedImage();
     void RedrawPaletteTab();
+    void UpdateBlinkPalette();
     void Image2Index(const QImage &image, std::vector<uint8_t>& index);
     void Index2Image(const std::vector<uint8_t>& index, QImage &image, int width, int height);
     void SaveProject(const QString &file_name);
@@ -65,6 +66,8 @@ private slots:
     void on_radioButton_oam_draw_result_clicked();
     void on_radioButton_oam_draw_background_clicked();
 
+    void on_checkBox_two_frames_blinking_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
@@ -73,6 +76,9 @@ private:
     Palette  m_palette_sprite[4];
     QLabel*  m_palette_label[16];
     QLabel*  m_palette_sprite_label[16];
+
+    BlinkPalette m_blink_palette_bg;
+    BlinkPalette m_blink_palette_sprite;
 
     int      m_pick_pallete_index;
     DialogPickPalette m_pick_color_dialog;

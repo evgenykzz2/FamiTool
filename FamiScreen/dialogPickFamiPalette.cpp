@@ -24,10 +24,11 @@ DialogPickFamiPalette::DialogPickFamiPalette(QWidget *parent) :
     ui->label_palette->installEventFilter(this);
 }
 
-void DialogPickFamiPalette::SetPalette(const uint32_t* palette, const Palette* palette_set)
+void DialogPickFamiPalette::SetPalette(const uint32_t* palette, const Palette* palette_set, const BlinkPalette &blink_palette)
 {
     m_palette = palette;
     m_palette_set = palette_set;
+    m_blink_palette = blink_palette;
 }
 
 void DialogPickFamiPalette::SetOriginalColor(uint32_t color)
@@ -50,7 +51,7 @@ void DialogPickFamiPalette::UpdatePalette()
     if (m_palette == 0)
         return;
 
-    int cells_width = m_blinking_palette ? 7 : 4;
+    int cells_width = m_blinking_palette ? 16 : 4;
     QImage image(cells_width*g_cell_size, g_cell_height*g_cell_size, QImage::Format_ARGB32);
     {
         QPainter painter(&image);
@@ -60,27 +61,19 @@ void DialogPickFamiPalette::UpdatePalette()
             {
                 for (int x = 0; x < cells_width; ++x)
                 {
-                    uint32_t color = 0;
-                    if (x == 0)
-                        color = m_palette[m_palette_set[y].c[0]];
-                    else if (x == 1)
-                        color = ColorAvg(m_palette[m_palette_set[y].c[0]], m_palette[m_palette_set[y].c[1]]);
-                    else if (x == 2)
-                        color = m_palette[m_palette_set[y].c[1]];
-                    else if (x == 3)
-                        color = ColorAvg(m_palette[m_palette_set[y].c[1]], m_palette[m_palette_set[y].c[2]]);
-                    else if (x == 4)
-                        color = m_palette[m_palette_set[y].c[2]];
-                    else if (x == 5)
-                        color = ColorAvg(m_palette[m_palette_set[y].c[2]], m_palette[m_palette_set[y].c[3]]);
-                    else
-                        color = m_palette[m_palette_set[y].c[3]];
+                    uint32_t color = m_blink_palette.color[x + y*16];
                     painter.setBrush(QBrush(QColor(color)));
                     if (y*cells_width + x == m_index)
                         painter.setPen(QColor(0xFFFFFFFF));
                     else
                         painter.setPen(QColor(0xFF000000));
                     painter.drawRect(x*g_cell_size, y*g_cell_size, g_cell_size-1, g_cell_size-1);
+                    if (m_blink_palette.enable[x + y*16] == 0)
+                    {
+                        painter.setPen(Qt::red);
+                        painter.drawLine(x*g_cell_size, y*g_cell_size, x*g_cell_size+g_cell_size, y*g_cell_size+g_cell_size);
+                        painter.drawLine(x*g_cell_size+g_cell_size, y*g_cell_size, x*g_cell_size, y*g_cell_size+g_cell_size);
+                    }
                 }
             }
         } else
@@ -118,7 +111,7 @@ bool DialogPickFamiPalette::eventFilter( QObject* object, QEvent* event )
         QMouseEvent* mouse_event = (QMouseEvent*)event;
         if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
         {
-            int cells_width = m_blinking_palette ? 7 : 4;
+            int cells_width = m_blinking_palette ? 16 : 4;
             int x = mouse_event->x() / g_cell_size;
             int y = mouse_event->y() / g_cell_size;
             if (x >= cells_width) x = cells_width-1;

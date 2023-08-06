@@ -2,7 +2,7 @@ FOUR_PLAYERS=0
 MAPPER=4
 
 	.inesprg 2
-	.ineschr 1
+	.ineschr 2
 	.inesmir 0
 	.inesmap MAPPER
 

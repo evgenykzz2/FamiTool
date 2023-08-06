@@ -119,11 +119,36 @@ main_reset:
 	sta PPU_ADDR
 	ldy #$00
 	.palette_loop:
-		lda palette, y
+		lda screen_jax_palette, y
 		sta PPU_DATA
 		iny
 		cpy #$20
 		bne .palette_loop
+		
+	;Load OAM
+	ldx #(120-1)
+	.oam_loop:
+		;x
+		lda screen_jax_oam, x
+		sta sprite_ptr, x
+		dex
+		;flags
+		lda screen_jax_oam, x
+		sta sprite_ptr, x
+		dex
+		;index
+		lda screen_jax_oam, x
+		ora #$01
+		sta sprite_ptr, x
+		dex
+		;y
+		lda screen_jax_oam, x
+		sec
+		sbc #$01
+		sta sprite_ptr, x
+		dex
+		bpl .oam_loop
+	jsr oam_swap
 		
 	jsr api_waitblank
 	
@@ -150,8 +175,8 @@ main_infin:
 	beq main_infin
 	lda #$00
 	sta <nmi_toggle
-	jsr oam_swap
-	
+	;jsr oam_swap
+
 	inc frame_count
 	lda frame_count
 	and #$01
@@ -167,6 +192,28 @@ main_infin:
 		iny
 		iny
 		sty $8001
+		
+		;2
+		inx
+		stx $8000
+		ldy #$08
+		sty $8001
+		;3
+		inx
+		stx $8000
+		iny
+		sty $8001
+		;4
+		inx
+		stx $8000
+		iny
+		sty $8001
+		;5
+		inx
+		stx $8000
+		iny
+		sty $8001
+		
 		jmp .frame_ok
 	.frame_odd:
 		;0
@@ -178,6 +225,27 @@ main_infin:
 		inx
 		stx $8000
 		iny
+		iny
+		sty $8001
+		
+		;2
+		inx
+		stx $8000
+		ldy #($08+$04)
+		sty $8001
+		;3
+		inx
+		stx $8000
+		iny
+		sty $8001
+		;4
+		inx
+		stx $8000
+		iny
+		sty $8001
+		;5
+		inx
+		stx $8000
 		iny
 		sty $8001
 	
@@ -382,162 +450,7 @@ launch_frame_off:
     bpl launch_frame_on
 
 	jmp [$FFFC] ;execute game
-	
-;--------------------------------------------------------------------			
-draw_mk_sprites_main:
-	ldy animation_frame
-	lda [tmp8],y
-	sta <addr0+0
-	lda [tmpA],y
-	sta <addr0+1
-	
-	ldx <sprite_pos
-	ldy #$00
-	lda [addr0], y
-	sta <tmp0
-	.oma_loop:
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp11
-		sta sprite_ptr, x
-		inx
-		
-		stx <tmp1
-			lsr a
-			lsr a
-			lsr a
-			lsr a
-			tax
-			inc sprite_limit, x
-		ldx <tmp1
-		
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp12
-		sta sprite_ptr, x
-		inx
-		
-		iny
-		lda [addr0], y
-		sta sprite_ptr, x
-		inx
-		
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp10
-		sta sprite_ptr, x
-		
-		dex
-		dex
-		dex
-		
-		dex
-		dex
-		dex
-		dex
-	
-	dec <tmp0
-	bne .oma_loop
-	stx <sprite_pos
-	
-	rts
-	
-;--------------------------------------------------------------------			
-draw_mk_sprites_detailed:
-	ldy animation_frame
-	lda [tmp8],y
-	sta <addr0+0
-	lda [tmpA],y
-	sta <addr0+1
-	
-	ldx <sprite_pos
-	ldy #$00
-	lda [addr0], y
-	sta <tmp0
-	.oma_loop:
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp11
-		sta sprite_ptr, x
-		
-		stx <tmp1
-			lsr a
-			lsr a
-			lsr a
-			lsr a
-			sta <tmp3
-			tax
-			lda sprite_limit, x
-			cmp #$08
-			bcc .draw_sprite
-				ldx <tmp1
-				lda #$F8
-				sta sprite_ptr, x
-				iny
-				iny
-				iny
-				dec <tmp0
-				bne .oma_loop
-				jmp .oma_loop_end
-			.draw_sprite:
-			
-			;Mark sprite limit
-			ldx <tmp3
-			inc sprite_limit, x
-		ldx <tmp1
-		
-		inx
 
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp12
-		sta sprite_ptr, x
-		inx
-		
-		iny
-		lda [addr0], y
-		sta sprite_ptr, x
-		inx
-		
-		iny
-		lda [addr0], y
-		clc
-		adc <tmp10
-		sta sprite_ptr, x
-		
-		dex
-		dex
-		dex
-		
-		dex
-		dex
-		dex
-		dex
-	
-	dec <tmp0
-	bne .oma_loop
-.oma_loop_end:
-	stx <sprite_pos
-	rts
-
-
-;--------------------------------------------------------------------	
-palette:
-    .db $0f, $00, $10, $30
-    .db $0f, $17, $27, $37
-    .db $0f, $04, $14, $24
-	.db $0f, $04, $14, $24
-
-    .db $0f, $00, $10, $30
-    .db $0f, $17, $27, $37
-    .db $0f, $04, $14, $24
-	.db $0f, $04, $14, $24
-	
 ;--------------------------------------------------------------------
 palette_fade:
 	.db $3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F
@@ -557,27 +470,3 @@ main_nmi:
 ;--------------------------------------------------------------------
 main_irq:
 	rti
-
-sprite_limit_clear:
-	lda #$00
-	ldy #$0F
-	.loop:
-		sta sprite_limit+$00, y
-		sta sprite_limit+$10, y
-		sta sprite_limit+$20, y
-		sta sprite_limit+$30, y
-		sta sprite_limit+$40, y
-		sta sprite_limit+$50, y
-		sta sprite_limit+$60, y
-		sta sprite_limit+$70, y
-		sta sprite_limit+$80, y
-		sta sprite_limit+$90, y
-		sta sprite_limit+$A0, y
-		sta sprite_limit+$B0, y
-		sta sprite_limit+$C0, y
-		sta sprite_limit+$D0, y
-		sta sprite_limit+$E0, y
-		sta sprite_limit+$F0, y
-		dey
-	bpl .loop
-	rts

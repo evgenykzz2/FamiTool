@@ -17,7 +17,7 @@ class DialogPickFamiPalette : public QDialog
 public:
     explicit DialogPickFamiPalette(QWidget *parent = 0);
     ~DialogPickFamiPalette();
-    void SetPalette(const uint32_t* palette, const Palette* palette_set);
+    void SetPalette(const uint32_t* palette, const Palette* palette_set, const BlinkPalette &blink_palette);
     void SetOriginalColor(uint32_t color);
     void SetPaletteIndex(int index);
     void UpdatePalette();
@@ -35,6 +35,7 @@ private:
     Ui::DialogPickFamiPalette *ui;
     const uint32_t* m_palette;
     const Palette* m_palette_set;
+    BlinkPalette m_blink_palette;
     uint32_t m_original_color;
 };
 

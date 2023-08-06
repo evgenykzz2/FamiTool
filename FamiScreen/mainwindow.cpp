@@ -29,6 +29,7 @@ static QLabel* s_palette_tab_render;
 static QLabel* s_attribute_tab_render;
 static QLabel* s_oam_tab_render;
 static const int s_corner_size = 8;
+static const int s_blink_palette_block_size = 24;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -80,6 +81,8 @@ MainWindow::MainWindow(QWidget *parent)
     for (int i = 0; i < 16; ++i)
         m_palette_sprite_label[i]->installEventFilter(this);
 
+    ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
+
     ui->comboBox_palette_mode->blockSignals(true);
     ui->comboBox_palette_mode->addItem("2C02 (Famicom)", QVariant((int)Palette_2C02));
     ui->comboBox_palette_mode->addItem("2C03", QVariant((int)Palette_2C03));
@@ -93,6 +96,9 @@ MainWindow::MainWindow(QWidget *parent)
     ui->comboBox_sprite_mode->blockSignals(false);
 
     on_comboBox_palette_mode_currentIndexChanged(0);
+
+    ui->label_blink_palette->installEventFilter(this);
+    ui->label_blink_palette_sprite->installEventFilter(this);
 
 
     //-------------------------------------------------------------------------------
@@ -191,6 +197,7 @@ void MainWindow::on_comboBox_palette_mode_currentIndexChanged(int index)
         m_palette_sprite_label[i]->setPixmap(QPixmap::fromImage(image));
     }
 
+    UpdateBlinkPalette();
     RedrawPaletteTab();
 }
 
@@ -201,19 +208,6 @@ void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
 
     if (ui->checkBox_two_frames_blinking->isChecked())
     {
-        //Make blinking palette
-        std::vector<uint32_t> blinkpal(7*4, 0);
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
-
         for (int y = 0; y < image.height(); ++y)
         {
             const uchar* line_ptr = image.constScanLine(y);
@@ -233,9 +227,11 @@ void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
                 int b = (color >> 16) & 0xFF;
                 int best_index = 0;
                 uint64_t best_diff = UINT64_MAX;
-                for (int c = 0; c < 7*4; ++c)
+                for (int c = 0; c < 16*4; ++c)
                 {
-                    uint32_t pcol = blinkpal[c];
+                    if (m_blink_palette_bg.enable[c] == 0)
+                        continue;
+                    uint32_t pcol = m_blink_palette_bg.color[c];
                     int pr = pcol & 0xFF;
                     int pg = (pcol >> 8) & 0xFF;
                     int pb = (pcol >> 16) & 0xFF;
@@ -298,18 +294,6 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
     if (ui->checkBox_two_frames_blinking->isChecked())
     {
         //Make blinking palette
-        std::vector<uint32_t> blinkpal(7*4, 0);
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
-
         for (int y = 0; y < height; ++y)
         {
             uchar* line_ptr = image.scanLine(y);
@@ -317,7 +301,7 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
             for (int x = 0; x < width; ++x)
             {
                 int c = index_ptr[x];
-                ((uint32_t*)line_ptr)[x] = blinkpal[c];
+                ((uint32_t*)line_ptr)[x] = m_blink_palette_bg.color[c];
             }
         }
     } else
@@ -333,6 +317,53 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
             }
         }
     }
+}
+
+void MainWindow::UpdateBlinkPalette()
+{
+    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
+    QImage image_bg(s_blink_palette_block_size*16+1, s_blink_palette_block_size*4+1, QImage::Format_ARGB32);
+    image_bg.fill(0);
+    QImage image_sprites(s_blink_palette_block_size*16+1, s_blink_palette_block_size*4+1, QImage::Format_ARGB32);
+    image_sprites.fill(0);
+    {
+        QPainter painter_bg(&image_bg);
+        QPainter painter_sp(&image_sprites);
+        for (int y = 0; y < 4; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                int a = x / 4;
+                int b = x % 4;
+                m_blink_palette_bg.color[y*16 + x]     = ColorAvg(palette[m_palette_set[y].c[a]], palette[m_palette_set[y].c[b]]);
+                painter_bg.setPen(QColor((uint32_t)0));
+                painter_bg.setBrush(QColor(m_blink_palette_bg.color[y*16 + x]));
+                painter_bg.drawRect(x*s_blink_palette_block_size, y*s_blink_palette_block_size, s_blink_palette_block_size, s_blink_palette_block_size);
+                if (m_blink_palette_bg.enable[y*16+x] == 0)
+                {
+                    painter_bg.setPen(Qt::red);
+                    painter_bg.drawLine(x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                    painter_bg.drawLine(x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                }
+                m_blink_palette_sprite.color[y*16 + x] = ColorAvg(palette[m_palette_sprite[y].c[a]], palette[m_palette_sprite[y].c[b]]);
+                painter_sp.setPen(QColor((uint32_t)0));
+                painter_sp.setBrush(QColor(m_blink_palette_sprite.color[y*16 + x]));
+                painter_sp.drawRect(x*s_blink_palette_block_size, y*s_blink_palette_block_size, s_blink_palette_block_size, s_blink_palette_block_size);
+                if (m_blink_palette_sprite.enable[y*16+x] == 0)
+                {
+                    painter_sp.setPen(Qt::red);
+                    painter_sp.drawLine(x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                    painter_sp.drawLine(x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                }
+            }
+        }
+    }
+    ui->label_blink_palette->setPixmap(QPixmap::fromImage(image_bg));
+    ui->label_blink_palette->setMinimumSize(image_bg.size());
+    ui->label_blink_palette->setMaximumSize(image_bg.size());
+    ui->label_blink_palette_sprite->setPixmap(QPixmap::fromImage(image_sprites));
+    ui->label_blink_palette_sprite->setMinimumSize(image_sprites.size());
+    ui->label_blink_palette_sprite->setMaximumSize(image_sprites.size());
 }
 
 void MainWindow::UpdateIndexedImage()
@@ -507,6 +538,28 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 break;
             }
         }
+        if (object == ui->label_blink_palette)
+        {
+            QMouseEvent* mouse_event = (QMouseEvent*)event;
+            int x = mouse_event->x()/(s_blink_palette_block_size);
+            int y = mouse_event->y()/(s_blink_palette_block_size);
+            if (x < 16 && y < 4)
+            {
+                m_blink_palette_bg.enable[x + y*16] ^= 1;
+                UpdateBlinkPalette();
+            }
+        }
+        if (object == ui->label_blink_palette_sprite)
+        {
+            QMouseEvent* mouse_event = (QMouseEvent*)event;
+            int x = mouse_event->x()/(s_blink_palette_block_size);
+            int y = mouse_event->y()/(s_blink_palette_block_size);
+            if (x < 16 && y < 4)
+            {
+                m_blink_palette_sprite.enable[x + y*16] ^= 1;
+                UpdateBlinkPalette();
+            }
+        }
     }
 
     if (object == s_palette_tab_render)
@@ -531,7 +584,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                         index = itt->second;
                     m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
                     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                    m_pick_fami_palette_dialog.SetPalette(palette, m_palette_set);
+                    m_pick_fami_palette_dialog.SetPalette(palette, m_palette_set, m_blink_palette_bg);
                     m_pick_fami_palette_dialog.SetPaletteIndex(index);
                     m_pick_fami_palette_dialog.SetBlinkingPaletteMode(ui->checkBox_two_frames_blinking->isChecked());
                     m_pick_fami_palette_dialog.UpdatePalette();
@@ -638,7 +691,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                             index = itt->second;
                         m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
                         const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                        m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite);
+                        m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite, m_blink_palette_bg);
                         m_pick_fami_palette_dialog.SetPaletteIndex(index);
                         m_pick_fami_palette_dialog.SetBlinkingPaletteMode(ui->checkBox_two_frames_blinking->isChecked());
                         m_pick_fami_palette_dialog.UpdatePalette();
@@ -730,6 +783,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
 void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
 {
     m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3] = index;
+    UpdateBlinkPalette();
     QImage image(m_palette_label[m_pick_pallete_index]->width(), m_palette_label[m_pick_pallete_index]->height(), QImage::Format_ARGB32);
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     image.fill(palette[m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]]);
@@ -739,6 +793,7 @@ void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
 void MainWindow::PaletteWindow_Slot_PaletteSpriteSelect(int index)
 {
     m_palette_sprite[m_pick_pallete_index/4].c[m_pick_pallete_index & 3] = index;
+    UpdateBlinkPalette();
     QImage image(m_palette_label[m_pick_pallete_index]->width(), m_palette_label[m_pick_pallete_index]->height(), QImage::Format_ARGB32);
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     image.fill(palette[m_palette_sprite[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]]);
@@ -753,6 +808,7 @@ void MainWindow::PaletteFamiWindow_Slot_PaletteSelect(int index)
         itt->second = index;
     else
         m_palette_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
+    UpdateBlinkPalette();
     RedrawPaletteTab();
 }
 
@@ -763,12 +819,14 @@ void MainWindow::PaletteFamiWindow_Slot_PaletteSpriteSelect(int index)
         itt->second = index;
     else
         m_palette_sprite_cvt_rule.insert(std::make_pair(m_pick_palette_cvt_color, index));
+    UpdateBlinkPalette();
     RedrawPaletteTab();
 }
 
 void MainWindow::on_pushButton_clear_colormapping_clicked()
 {
     m_palette_cvt_rule.clear();
+    UpdateBlinkPalette();
     RedrawPaletteTab();
 }
 
@@ -883,6 +941,19 @@ void MainWindow::SaveProject(const QString &file_name)
     json.get<picojson::object>()["indexed_colors"] = picojson::value( (double)ui->lineEdit_palette_color_count->text().toInt() );
     json.get<picojson::object>()["two_frames_blinking"] = picojson::value( (bool)ui->checkBox_two_frames_blinking->isChecked() );
 
+    if (ui->checkBox_two_frames_blinking->isChecked())
+    {
+        for (size_t n = 0; n < 16*4; ++n)
+        {
+            QString name = QString("blink_pal_bg_%1").arg(n);
+            if (m_blink_palette_bg.enable[n])
+                json.get<picojson::object>()[name.toStdString()] = picojson::value( 1.0 );
+            name = QString("blink_pal_sp_%1").arg(n);
+            if (m_blink_palette_sprite.enable[n])
+                json.get<picojson::object>()[name.toStdString()] = picojson::value( 1.0 );
+        }
+    }
+
     picojson::array items = picojson::array();
     for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
     {
@@ -900,13 +971,13 @@ void MainWindow::SaveProject(const QString &file_name)
         picojson::array items = picojson::array();
         for (auto itt = m_palette_sprite_cvt_rule.begin(); itt != m_palette_sprite_cvt_rule.end(); ++itt)
         {
-                picojson::object item_obj;
-                item_obj["r"] = picojson::value( (double)(itt->first & 0xFF) );
-                item_obj["g"] = picojson::value( (double)((itt->first >> 8) & 0xFF) );
-                item_obj["b"] = picojson::value( (double)((itt->first >> 16) & 0xFF) );
-                //item_obj["a"] = picojson::value( (double)((itt->first >> 24) & 0xFF) );
-                item_obj["i"] = picojson::value( (double)itt->second );
-                items.push_back(picojson::value(item_obj));
+            picojson::object item_obj;
+            item_obj["r"] = picojson::value( (double)(itt->first & 0xFF) );
+            item_obj["g"] = picojson::value( (double)((itt->first >> 8) & 0xFF) );
+            item_obj["b"] = picojson::value( (double)((itt->first >> 16) & 0xFF) );
+            //item_obj["a"] = picojson::value( (double)((itt->first >> 24) & 0xFF) );
+            item_obj["i"] = picojson::value( (double)itt->second );
+            items.push_back(picojson::value(item_obj));
         }
         json.get<picojson::object>()["color_sprite_map"] = picojson::value(items);
     }
@@ -1098,6 +1169,23 @@ void MainWindow::LoadProject(const QString &file_name)
     if (json.contains("two_frames_blinking"))
         ui->checkBox_two_frames_blinking->setChecked(json.get<picojson::object>()["two_frames_blinking"].get<bool>());
 
+    if (ui->checkBox_two_frames_blinking->isChecked())
+    {
+        for (size_t n = 0; n < 16*4; ++n)
+        {
+            QString name = QString("blink_pal_bg_%1").arg(n);
+            if (json.contains(name.toStdString()))
+                m_blink_palette_bg.enable[n] = (int)json.get<picojson::object>()[name.toStdString()].get<double>();
+            else
+                m_blink_palette_bg.enable[n] = 0;
+            name = QString("blink_pal_sp_%1").arg(n);
+            if (json.contains(name.toStdString()))
+                m_blink_palette_sprite.enable[n] = (int)json.get<picojson::object>()[name.toStdString()].get<double>();
+            else
+                m_blink_palette_sprite.enable[n] = 0;
+        }
+    }
+
     m_oam_vector.clear();
     if (json.contains("oam"))
     {
@@ -1112,6 +1200,10 @@ void MainWindow::LoadProject(const QString &file_name)
             m_oam_vector.push_back(oam);
         }
     }
+
+    ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
+    if (ui->checkBox_two_frames_blinking->isChecked())
+        UpdateBlinkPalette();
 
     UpdateIndexedImage();
     on_comboBox_palette_mode_currentIndexChanged(palette_mode);
@@ -1144,19 +1236,6 @@ void MainWindow::RedrawAttributeTab()
 
     if (ui->checkBox_two_frames_blinking->isChecked())
     {
-        //Make blinking palette
-        std::vector<uint32_t> blinkpal(7*4, 0);
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
-
         for (int y = 0; y < 240; y += 16)
         {
             for (int x = 0; x < 256; x += 16)
@@ -1170,7 +1249,7 @@ void MainWindow::RedrawAttributeTab()
                     {
                         if (y+yi >= 240)
                             continue;
-                        const uint8_t* src_line = m_image_screen.scanLine(y+yi) + x*4;
+                        const uint8_t* src_line = m_image_indexed.scanLine(y+yi) + x*4;
                         for (int xi = 0; xi < 16; ++xi)
                         {
                             uint32_t color = ((const uint32_t*)src_line)[xi] & 0xFFFFFF;
@@ -1179,12 +1258,14 @@ void MainWindow::RedrawAttributeTab()
                             if (itt != m_palette_cvt_rule.end())
                             {
                                 int col = itt->second;
-                                for (int c = 0; c < 7; ++c)
+                                for (int c = 0; c < 16; ++c)
                                 {
-                                    if (blinkpal[col] == blinkpal[pal*7+c])
+                                    if (m_blink_palette_bg.enable[pal*16+c] == 0)
+                                        continue;
+                                    if (m_blink_palette_bg.color[col] == m_blink_palette_bg.color[pal*16+c])
                                     {
                                         //palette_index[xi + yi*16] = blinkpal[pal*8+c];
-                                        palette_c[xi + yi*16] = pal*7+c;
+                                        palette_c[xi + yi*16] = pal*16+c;
                                         found = true;
                                         break;
                                     }
@@ -1193,9 +1274,11 @@ void MainWindow::RedrawAttributeTab()
                             if (!found)
                             {
                                 int64_t best_diff = INT64_MAX;
-                                for (int c = 0; c < 7; ++c)
+                                for (int c = 0; c < 16; ++c)
                                 {
-                                    uint32_t color_pal = blinkpal[pal*7+c];
+                                    if (m_blink_palette_bg.enable[pal*16+c] == 0)
+                                        continue;
+                                    uint32_t color_pal = m_blink_palette_bg.color[pal*16+c];
                                     int dr = (int)(color & 0xFF) - (int)(color_pal & 0xFF);
                                     int dg = (int)((color >> 8) & 0xFF) - (int)((color_pal >> 8) & 0xFF);
                                     int db = (int)((color >> 16)& 0xFF) - (int)((color_pal >> 16)& 0xFF);
@@ -1203,7 +1286,7 @@ void MainWindow::RedrawAttributeTab()
                                     if (d < best_diff)
                                     {
                                         //palette_index[xi + yi*16] = 0;
-                                        palette_c[xi + yi*16] = pal*7+c;
+                                        palette_c[xi + yi*16] = pal*16+c;
                                         best_diff = d;
                                     }
                                 }
@@ -1228,72 +1311,42 @@ void MainWindow::RedrawAttributeTab()
                     uint8_t* line = m_image_screen.scanLine(y+yi) + x*4;
                     for (int xi = 0; xi < 16; ++xi)
                     {
-                        ((uint32_t*)line)[xi] = blinkpal[palette_c_best[xi + yi*16]];
+                        ((uint32_t*)line)[xi] = m_blink_palette_bg.color[palette_c_best[xi + yi*16]];
                         int tile_y = (y + yi) / 8;
                         int tile_dy = (y + yi) % 8;
                         int tile_x = (x + xi) / 8;
                         int tile_dx = (x + xi) % 8;
-                        uint8_t cc = palette_c_best[xi + yi*16] % 7;
+                        uint8_t cc = palette_c_best[xi + yi*16] % 16;
+                        uint8_t c0 = cc / 4;
+                        uint8_t c1 = cc % 4;
 
                         //if ( (uint8_t)((yi & 1) ^ (xi & 1)) == 0)
-                        if ( (uint8_t)((xi & 1)) == 0)
+                        //if ( (uint8_t)((xi & 1)) == 0)
+                        if ( (uint8_t)((yi & 1)) != 0)
                         {
-                            if (cc <= 1)
-                            {
-                            } else if (cc <= 3)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                            } else if (cc <= 5)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            } else if (cc <= 6)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            }
+                            uint8_t t = c0;
+                            c0 = c1;
+                            c1 = t;
+                        }
 
-                            if (cc <= 0)
-                            {
-                            } else if (cc <= 2)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                            } else if (cc <= 4)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            } else if (cc <= 6)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            }
-                        } else
+                        if (c0 == 1)
+                            m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
+                        else if (c0 == 2)
+                            m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
+                        else if (c0 == 3)
                         {
-                            if (cc <= 0)
-                            {
-                            } else if (cc <= 2)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                            } else if (cc <= 4)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            } else if (cc <= 6)
-                            {
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            }
+                            m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
+                            m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
+                        }
 
-                            if (cc <= 1)
-                            {
-                            } else if (cc <= 3)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                            } else if (cc <= 5)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            } else if (cc <= 6)
-                            {
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
-                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
-                            }
+                        if (c1 == 1)
+                            m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
+                        else if (c1 == 2)
+                            m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
+                        else if (c1 == 3)
+                        {
+                            m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] |= 0x80 >> tile_dx;
+                            m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy + 8] |= 0x80 >> tile_dx;
                         }
                     }
                 }
@@ -1488,6 +1541,7 @@ void MainWindow::RedrawOamTab()
     int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
 
     QImage render(m_image_indexed.width(), m_image_indexed.height(), QImage::Format_ARGB32);
+    //QImage indexed_rgba = m_image_indexed.convertToFormat(QImage::Format_ARGB32);
     //render.fill(m_bg_color);
     {
         QPainter painter(&render);
@@ -1498,28 +1552,18 @@ void MainWindow::RedrawOamTab()
     }
 
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-    std::vector<uint32_t> blinkpal(7*4, 0);
 
-    if (ui->checkBox_two_frames_blinking->isChecked())
-    {
-        //Make blinking palette
-        for (int y = 0; y < 4; ++y)
-        {
-            blinkpal[y*7+0] = palette[m_palette_set[y].c[0]];
-            blinkpal[y*7+1] = ColorAvg(palette[m_palette_set[y].c[0]], palette[m_palette_set[y].c[1]]);
-            blinkpal[y*7+2] = palette[m_palette_set[y].c[1]];
-            blinkpal[y*7+3] = ColorAvg(palette[m_palette_set[y].c[1]], palette[m_palette_set[y].c[2]]);
-            blinkpal[y*7+4] = palette[m_palette_set[y].c[2]];
-            blinkpal[y*7+5] = ColorAvg(palette[m_palette_set[y].c[2]], palette[m_palette_set[y].c[3]]);
-            blinkpal[y*7+6] = palette[m_palette_set[y].c[3]];
-        }
-    }
 
-    if (ui->radioButton_oam_draw_result->isChecked())
     {
         for (size_t n = 0; n <m_oam_vector.size(); ++n)
         {
             int pindex = m_oam_vector[n].palette;
+            m_oam_vector[n].chr_export.resize(sprite_height*2);
+            memset(m_oam_vector[n].chr_export.data(), 0, m_oam_vector[n].chr_export.size());
+
+            m_oam_vector[n].chr_export_blink.resize(sprite_height*2);
+            memset(m_oam_vector[n].chr_export_blink.data(), 0, m_oam_vector[n].chr_export_blink.size());
+
             Palette pal = m_palette_sprite[pindex];
             for (int y = 0; y < sprite_height; ++y)
             {
@@ -1538,16 +1582,20 @@ void MainWindow::RedrawOamTab()
                             continue;
                         //if (scan_line[xp] == m_bg_color)
                         //    continue;
-                        uint32_t color = scan_line[xp] & 0x00FFFFFF;
+                        uint32_t color = scan_line[xp] & 0xFFFFFF;
+                        int color_index = -1;
                         auto itt = m_palette_sprite_cvt_rule.find(color);
                         if (itt != m_palette_sprite_cvt_rule.end())
                         {
                             bool found = false;
-                            for (int c = 1; c < 7; ++c)
+                            for (int c = 0; c < 16; ++c)
                             {
-                                if (blinkpal[itt->second] == blinkpal[pindex*7 + c])
+                                //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                    //continue;
+                                if (m_blink_palette_bg.color[itt->second] == m_blink_palette_sprite.color[pindex*16 + c])
                                 {
-                                    render_line[xp] = blinkpal[pindex*7 + c];
+                                    //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + c];
+                                    color_index = pindex*16 + c;
                                     found = true;
                                     break;
                                 }
@@ -1560,11 +1608,13 @@ void MainWindow::RedrawOamTab()
                                 int best_p = 0;
                                 for (int p = 0; p < 4; ++p)
                                 {
-                                    for (int c = 1; c < 7; ++c)
+                                    for (int c = 0; c < 16; ++c)
                                     {
-                                        int dr = (color & 0xFF) - (blinkpal[p*7 + c] & 0xFF);
-                                        int dg = ((color >> 8) & 0xFF) -  ((blinkpal[p*7 + c] >> 8) & 0xFF);
-                                        int db = ((color >> 16) & 0xFF) - ((blinkpal[p*7 + c] >> 16) & 0xFF);
+                                        //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                            //continue;
+                                        int dr = (color & 0xFF) - (m_blink_palette_sprite.color[p*16 + c] & 0xFF);
+                                        int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[p*16 + c] >> 8) & 0xFF);
+                                        int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[p*16 + c] >> 16) & 0xFF);
                                         int64_t diff = dr*dr + dg*dg + db*db;
                                         if (diff < best_diff)
                                         {
@@ -1577,7 +1627,8 @@ void MainWindow::RedrawOamTab()
                                 if (best_p == pindex)
                                 {
                                     found = true;
-                                    render_line[xp] = blinkpal[pindex*7 + best_c];
+                                    //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + best_c];
+                                    color_index = pindex*16 + best_c;
                                 }
                             }
                             if (found == false && m_oam_vector[n].mode != 0)
@@ -1585,11 +1636,13 @@ void MainWindow::RedrawOamTab()
                                 //Find any Color
                                 int64_t best_diff = INT64_MAX;
                                 int best_c = 1;
-                                for (int c = 1; c < 7; ++c)
+                                for (int c = 0; c < 16; ++c)
                                 {
-                                    int dr = (color & 0xFF) - (blinkpal[pindex*7 + c] & 0xFF);
-                                    int dg = ((color >> 8) & 0xFF) -  ((blinkpal[pindex*7 + c] >> 8) & 0xFF);
-                                    int db = ((color >> 16) & 0xFF) - ((blinkpal[pindex*7 + c] >> 16) & 0xFF);
+                                    //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                        //continue;
+                                    int dr = (color & 0xFF) - (m_blink_palette_sprite.color[pindex*16 + c] & 0xFF);
+                                    int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[pindex*16 + c] >> 8) & 0xFF);
+                                    int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[pindex*16 + c] >> 16) & 0xFF);
                                     int64_t diff = dr*dr + dg*dg + db*db;
                                     if (diff < best_diff)
                                     {
@@ -1597,16 +1650,20 @@ void MainWindow::RedrawOamTab()
                                         best_c = c;
                                     }
                                 }
-                                render_line[xp] = blinkpal[pindex*7 + best_c];
+                                //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + best_c];
+                                color_index = pindex*16 + best_c;
                             }
                         } else
                         {
                             bool found = false;
-                            for (int c = 1; c < 7; ++c)
+                            for (int c = 0; c < 16; ++c)
                             {
-                                if (color == blinkpal[pindex*7 + c])
+                                //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                    //continue;
+                                if (color == m_blink_palette_sprite.color[pindex*16 + c])
                                 {
-                                    render_line[xp] = blinkpal[pindex*7 + c];
+                                    //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + c];
+                                    color_index = pindex*16 + c;
                                     found = true;
                                     break;
                                 }
@@ -1619,11 +1676,13 @@ void MainWindow::RedrawOamTab()
                                 int best_p = 0;
                                 for (int p = 0; p < 4; ++p)
                                 {
-                                    for (int c = 1; c < 7; ++c)
+                                    for (int c = 0; c < 16; ++c)
                                     {
-                                        int dr = (color & 0xFF) - (blinkpal[p*7 + c] & 0xFF);
-                                        int dg = ((color >> 8) & 0xFF) -  ((blinkpal[p*7 + c] >> 8) & 0xFF);
-                                        int db = ((color >> 16) & 0xFF) - ((blinkpal[p*7 + c] >> 16) & 0xFF);
+                                        //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                            //continue;
+                                        int dr = (color & 0xFF) - (m_blink_palette_sprite.color[p*16 + c] & 0xFF);
+                                        int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[p*16 + c] >> 8) & 0xFF);
+                                        int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[p*16 + c] >> 16) & 0xFF);
                                         int64_t diff = dr*dr + dg*dg + db*db;
                                         if (diff < best_diff)
                                         {
@@ -1636,7 +1695,8 @@ void MainWindow::RedrawOamTab()
                                 if (best_p == pindex)
                                 {
                                     found = true;
-                                    render_line[xp] = blinkpal[pindex*7 + best_c];
+                                    //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + best_c];
+                                    color_index = pindex*16 + best_c;
                                 }
                             }
                             if (found == false && m_oam_vector[n].mode != 0)
@@ -1644,11 +1704,13 @@ void MainWindow::RedrawOamTab()
                                 //Find any Color
                                 int64_t best_diff = INT64_MAX;
                                 int best_c = 1;
-                                for (int c = 1; c < 7; ++c)
+                                for (int c = 0; c < 16; ++c)
                                 {
-                                    int dr = (color & 0xFF) - (blinkpal[pindex*7 + c] & 0xFF);
-                                    int dg = ((color >> 8) & 0xFF) -  ((blinkpal[pindex*7 + c] >> 8) & 0xFF);
-                                    int db = ((color >> 16) & 0xFF) - ((blinkpal[pindex*7 + c] >> 16) & 0xFF);
+                                    //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                        //continue;
+                                    int dr = (color & 0xFF) - (m_blink_palette_sprite.color[pindex*16 + c] & 0xFF);
+                                    int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[pindex*16 + c] >> 8) & 0xFF);
+                                    int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[pindex*16 + c] >> 16) & 0xFF);
                                     int64_t diff = dr*dr + dg*dg + db*db;
                                     if (diff < best_diff)
                                     {
@@ -1656,7 +1718,60 @@ void MainWindow::RedrawOamTab()
                                         best_c = c;
                                     }
                                 }
-                                render_line[xp] = blinkpal[pindex*7 + best_c];
+                                //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + best_c];
+                                color_index = pindex*16 + best_c;
+                            }
+                        }
+                        if (color_index >= 0)
+                        {
+                            if (ui->radioButton_oam_draw_result->isChecked())
+                                render_line[xp] = m_blink_palette_sprite.color[color_index];
+                            //modify background pixel to 0
+                            {
+                                int tile_y  = (m_oam_vector[n].y + y) / 8;
+                                int tile_dy = (m_oam_vector[n].y + y) % 8;
+                                int tile_x  = (m_oam_vector[n].x + x) / 8;
+                                int tile_dx = (m_oam_vector[n].x + x) % 8;
+                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy        ] &= ~(0x80 >> tile_dx);
+                                m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy+8      ] &= ~(0x80 >> tile_dx);
+                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy  ] &= ~(0x80 >> tile_dx);
+                                m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy+8] &= ~(0x80 >> tile_dx);
+
+                                //m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ]  = 0;
+                                //m_screen_tiles[(tile_y*32 + tile_x)*16 + tile_dy    ]  = 0;
+                                //m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] = 0;
+                                //m_screen_tiles_blink[(tile_y*32 + tile_x)*16 + tile_dy    ] = 0;
+                            }
+                            uint8_t cc = color_index % 16;
+                            uint8_t c0 = cc / 4;
+                            uint8_t c1 = cc % 4;
+                            if ((m_oam_vector[n].y + y) % 2 != 0)
+                            {
+                                uint8_t tmp = c0;
+                                c0 = c1;
+                                c1 = tmp;
+                            }
+                            int ofs = (y < 8) ? 0 : 16;
+                            int y0 = y < 8 ? y : y-8;
+
+                            if (c0 == 1)
+                                m_oam_vector[n].chr_export[ofs + y0] |= 0x80 >> x;
+                            else if (c0 == 2)
+                                m_oam_vector[n].chr_export[ofs + y0 + 8] |= 0x80 >> x;
+                            else if (c0 == 3)
+                            {
+                                m_oam_vector[n].chr_export[ofs + y0] |= 0x80 >> x;
+                                m_oam_vector[n].chr_export[ofs + y0 + 8] |= 0x80 >> x;
+                            }
+
+                            if (c1 == 1)
+                                m_oam_vector[n].chr_export_blink[ofs + y0    ] |= 0x80 >> x;
+                            else if (c1 == 2)
+                                m_oam_vector[n].chr_export_blink[ofs + y0 + 8] |= 0x80 >> x;
+                            else if (c1 == 3)
+                            {
+                                m_oam_vector[n].chr_export_blink[ofs + y0    ] |= 0x80 >> x;
+                                m_oam_vector[n].chr_export_blink[ofs + y0 + 8] |= 0x80 >> x;
                             }
                         }
                     }
@@ -1670,8 +1785,8 @@ void MainWindow::RedrawOamTab()
                         //if (scan_line[xp] == m_bg_color)
                         //    continue;
                         uint32_t color = scan_line[xp] & 0x00FFFFFF;
-                        auto itt = m_palette_sprite_cvt_rule.find(color);
-                        if (itt != m_palette_sprite_cvt_rule.end())
+                        auto itt = m_palette_cvt_rule.find(color);
+                        if (itt != m_palette_cvt_rule.end())
                         {
                             if (itt->second == pindex*4 + 1)
                             {
@@ -1861,5 +1976,13 @@ void MainWindow::on_radioButton_oam_draw_result_clicked()
 void MainWindow::on_radioButton_oam_draw_background_clicked()
 {
     RedrawOamTab();
+}
+
+
+void MainWindow::on_checkBox_two_frames_blinking_clicked()
+{
+    if (ui->checkBox_two_frames_blinking->isChecked())
+        UpdateBlinkPalette();
+    ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
 }
 
