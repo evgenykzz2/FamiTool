@@ -24,10 +24,12 @@ DialogPickFamiPalette::DialogPickFamiPalette(QWidget *parent) :
     ui->label_palette->installEventFilter(this);
 }
 
-void DialogPickFamiPalette::SetPalette(const uint32_t* palette, const Palette* palette_set)
+void DialogPickFamiPalette::SetPalette(const uint32_t* palette, const Palette* palette_set, bool enable_blink_palette, const BlinkPalette &blink_palette)
 {
     m_palette = palette;
     m_palette_set = palette_set;
+    m_enable_blink_palette = enable_blink_palette;
+    m_blink_palette = blink_palette;
 }
 
 void DialogPickFamiPalette::SetOriginalColor(uint32_t color)
@@ -44,7 +46,31 @@ void DialogPickFamiPalette::UpdatePalette()
 {
     if (m_palette == 0)
         return;
-    QImage image(g_cell_width*g_cell_size, g_cell_height*g_cell_size, QImage::Format_ARGB32);
+    int cell_count = m_enable_blink_palette ? 16 : 4;
+    QImage image(cell_count*g_cell_size, g_cell_height*g_cell_size, QImage::Format_ARGB32);
+    if (m_enable_blink_palette)
+    {
+        QPainter painter(&image);
+        for (int y = 0; y < g_cell_height; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                uint32_t color = m_blink_palette.color[x + y*16];
+                painter.setBrush(QBrush(QColor(color)));
+                if (y*cell_count + x == m_index)
+                    painter.setPen(QColor(0xFFFFFFFF));
+                else
+                    painter.setPen(QColor(0xFF000000));
+                painter.drawRect(x*g_cell_size, y*g_cell_size, g_cell_size-1, g_cell_size-1);
+                if (m_blink_palette.enable[x + y*16] == 0)
+                {
+                    painter.setPen(Qt::red);
+                    painter.drawLine(x*g_cell_size, y*g_cell_size, x*g_cell_size+g_cell_size, y*g_cell_size+g_cell_size);
+                    painter.drawLine(x*g_cell_size+g_cell_size, y*g_cell_size, x*g_cell_size, y*g_cell_size+g_cell_size);
+                }
+            }
+        }
+    } else
     {
         QPainter painter(&image);
         for (int y = 0; y < g_cell_height; ++y)
@@ -79,11 +105,12 @@ bool DialogPickFamiPalette::eventFilter( QObject* object, QEvent* event )
         QMouseEvent* mouse_event = (QMouseEvent*)event;
         if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
         {
+            int cell_count = m_enable_blink_palette ? 16 : 4;
             int x = mouse_event->x() / g_cell_size;
             int y = mouse_event->y() / g_cell_size;
-            if (x >= g_cell_width) x = g_cell_width-1;
+            if (x >= cell_count) x = cell_count-1;
             if (y >= g_cell_height) y = g_cell_height-1;
-            int index = x + y*g_cell_width;
+            int index = x + y*cell_count;
             if (index != m_index)
             {
                 m_index = index;

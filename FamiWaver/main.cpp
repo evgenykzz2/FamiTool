@@ -3,6 +3,55 @@
 #include <iomanip>
 #include <sstream>
 #include <fstream>
+#include <map>
+#include <algorithm>
+
+
+void TestEncode(const uint8_t* wave, size_t size)
+{
+#if 0
+	std::map<std::vector<uint8_t>, int> form_map;
+	static const size_t form_len = 9;
+	std::vector<uint8_t> form(form_len);
+	for (size_t i = 0; i < size - form_len - 1; ++i)
+	{
+		for (size_t n = 0; n < form_len; ++n)
+			form[n] = wave[i+1+n] - wave[i];
+		auto itt = form_map.find(form);
+		if (itt == form_map.end())
+		{
+			form_map.insert(std::make_pair(form, 1));
+		}
+		else
+		{
+			++itt->second;
+		}
+	}
+
+	std::vector<std::pair<int, std::vector<uint8_t>>> sort_vector;
+	for (auto itt = form_map.begin(); itt != form_map.end(); ++itt)
+		sort_vector.push_back(std::make_pair(-itt->second, itt->first));
+
+	std::sort(sort_vector.begin(), sort_vector.end());
+	for (int i = 0; i < 32; ++i)
+	{
+		std::cout << std::dec << i << ":" << -sort_vector[i].first << ":";
+		for (size_t n = 0; n < form_len; ++n)
+			std::cout << std::hex << std::setw(2) << std::setfill('0') << ((uint16_t)sort_vector[i].second[n]) << " ";
+		std::cout << std::endl;
+	}
+#endif
+	size_t avg_count = 0;
+	size_t non_avg_count = 0;
+	for (size_t i = 0; i < size-4; i += 2)
+	{
+		if ((wave[i] + wave[i + 2])/2 == wave[i + 1])
+			avg_count++;
+		else
+			non_avg_count++;
+	}
+	std::cout << "Avg=" << avg_count << " non avg=" << non_avg_count << std::endl;
+}
 
 int main(int argc, char* argv[])
 {
@@ -70,6 +119,10 @@ int main(int argc, char* argv[])
 			return -1;
 	}
 
+
+	TestEncode(dst.m_data.data(), dst.m_data.size());
+
+#if 0
 	for (size_t n = 0; n < dst.m_data.size(); n += 8*1024)
 	{
 		std::stringstream stream;
@@ -95,5 +148,6 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
+#endif
 	return 0;
 }

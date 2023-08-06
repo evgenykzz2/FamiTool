@@ -10,6 +10,7 @@ void MainWindow::Export_SpriteConvert()
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
     int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
+    bool blink = ui->checkBox_palette_blink->isChecked();
 
     for (size_t index = 0; index < m_slice_vector.size(); ++index)
     {
@@ -21,6 +22,9 @@ void MainWindow::Export_SpriteConvert()
             m_slice_vector[index].oam[n].chr_export.resize(sprite_height*2);
             uint8_t* chr_cvt = m_slice_vector[index].oam[n].chr_export.data();
             memset(chr_cvt, 0, sprite_height*2);
+            m_slice_vector[index].oam[n].chr_export_blink.resize(sprite_height*2);
+            uint8_t* chr_blink_cvt = m_slice_vector[index].oam[n].chr_export_blink.data();
+            memset(chr_blink_cvt, 0, sprite_height*2);
             for (int y = 0; y < sprite_height; ++y)
             {
                 int yline = y + m_slice_vector[index].oam[n].y;
@@ -29,6 +33,8 @@ void MainWindow::Export_SpriteConvert()
                 const uint32_t* scan_line = (const uint32_t*)cut.scanLine(yline);
                 uint8_t* bit0 = y < 8 ? chr_cvt+y : chr_cvt+8+y;
                 uint8_t* bit1 = y < 8 ? chr_cvt+8+y : chr_cvt+16+y;
+                uint8_t* bitb0 = y < 8 ? chr_blink_cvt+y : chr_blink_cvt+8+y;
+                uint8_t* bitb1 = y < 8 ? chr_blink_cvt+8+y : chr_blink_cvt+16+y;
                 uint8_t mask = 0x80;
                 for (int x = 0; x < 8; ++x)
                 {
@@ -39,39 +45,104 @@ void MainWindow::Export_SpriteConvert()
                         continue;
                     }
                     uint32_t color = scan_line[xp];
-                    if (color == palette[pal.c[1]])
-                        *bit0 |= mask;
-                    else if (color == palette[pal.c[2]])
-                        *bit1 |= mask;
-                    else if (color == palette[pal.c[3]])
+                    if (blink)
                     {
-                        *bit0 |= mask;
-                        *bit1 |= mask;
-                    } else if (m_slice_vector[index].oam[n].mode != 0)
-                    {
-                        //Find any Color
-                        int64_t best_diff = INT64_MAX;
-                        int best_c = 1;
-                        for (int c = 1; c < 4; ++c)
+                        int found = -1;
+                        for (int i = 0; i < 16; ++i)
                         {
-                            int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
-                            int dg = ((color >> 8) & 0xFF) -  ((palette[pal.c[c]] >> 8) & 0xFF);
-                            int db = ((color >> 16) & 0xFF) - ((palette[pal.c[c]] >> 16) & 0xFF);
-                            int64_t diff = dr*dr + dg*dg + db*db;
-                            if (diff < best_diff)
+                            if (!m_blink_palette.enable[pindex*16+i])
+                                continue;
+                            if (color == m_blink_palette.color[pindex*16+i])
                             {
-                                best_diff = diff;
-                                best_c = c;
+                                found = i;
+                                break;
                             }
                         }
-                        if (best_c==1)
+                        if (found < 0 && m_slice_vector[index].oam[n].mode != 0)
+                        {
+                            //Find any Color
+                            int64_t best_diff = INT64_MAX;
+                            for (int c = 0; c < 16; ++c)
+                            {
+                                if (!m_blink_palette.enable[pindex*16+c])
+                                    continue;
+                                int dr = (color & 0xFF) - (m_blink_palette.color[pindex*16+c] & 0xFF);
+                                int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette.color[pindex*16+c] >> 8) & 0xFF);
+                                int db = ((color >> 16) & 0xFF) - ((m_blink_palette.color[pindex*16+c] >> 16) & 0xFF);
+                                int64_t diff = dr*dr + dg*dg + db*db;
+                                if (diff < best_diff)
+                                {
+                                    best_diff = diff;
+                                    found = c;
+                                }
+                            }
+                        }
+                        if (found >= 0)
+                        {
+                            uint8_t c0 = found / 4;
+                            uint8_t c1 = found % 4;
+                            /*if ((m_slice_vector[index].oam[n].y + y) % 2 != 0)
+                            {
+                                uint8_t tmp = c0;
+                                c0 = c1;
+                                c1 = tmp;
+                            }*/
+                            if (c0 == 1)
+                                *bit0 |= mask;
+                            else if (c0 == 2)
+                                *bit1 |= mask;
+                            else if (c0 == 3)
+                            {
+                                *bit0 |= mask;
+                                *bit1 |= mask;
+                            }
+
+                            if (c1 == 1)
+                                *bitb0 |= mask;
+                            else if (c1 == 2)
+                                *bitb1 |= mask;
+                            else if (c1 == 3)
+                            {
+                                *bitb0 |= mask;
+                                *bitb1 |= mask;
+                            }
+                        }
+                    } else
+                    {
+                        if (color == palette[pal.c[1]])
                             *bit0 |= mask;
-                        else if (best_c==2)
+                        else if (color == palette[pal.c[2]])
                             *bit1 |= mask;
-                        else if (best_c==3)
+                        else if (color == palette[pal.c[3]])
                         {
                             *bit0 |= mask;
                             *bit1 |= mask;
+                        } else if (m_slice_vector[index].oam[n].mode != 0)
+                        {
+                            //Find any Color
+                            int64_t best_diff = INT64_MAX;
+                            int best_c = 1;
+                            for (int c = 1; c < 4; ++c)
+                            {
+                                int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
+                                int dg = ((color >> 8) & 0xFF) -  ((palette[pal.c[c]] >> 8) & 0xFF);
+                                int db = ((color >> 16) & 0xFF) - ((palette[pal.c[c]] >> 16) & 0xFF);
+                                int64_t diff = dr*dr + dg*dg + db*db;
+                                if (diff < best_diff)
+                                {
+                                    best_diff = diff;
+                                    best_c = c;
+                                }
+                            }
+                            if (best_c==1)
+                                *bit0 |= mask;
+                            else if (best_c==2)
+                                *bit1 |= mask;
+                            else if (best_c==3)
+                            {
+                                *bit0 |= mask;
+                                *bit1 |= mask;
+                            }
                         }
                     }
                     mask >>=1;
@@ -112,60 +183,26 @@ void MainWindow::on_pushButton_export_test_clicked()
     std::string unit_name = "jax";
 
     std::stringstream stream;
-    stream << unit_name << "_main_low:" << std::endl;
+    stream << unit_name << "_oam_low:" << std::endl;
     for (size_t index = 0; index < m_slice_vector.size(); ++index)
-        stream << "    .db low(" << unit_name << "_main_oam_" << std::dec << index << ")" << std::endl;
-    stream << unit_name << "_main_high:" << std::endl;
+        stream << "    .db low(" << unit_name << "_oam_" << std::dec << index << ")" << std::endl;
+    stream << unit_name << "_oam_high:" << std::endl;
     for (size_t index = 0; index < m_slice_vector.size(); ++index)
-        stream << "    .db high(" << unit_name << "_main_oam_" << std::dec << index << ")" << std::endl;
+        stream << "    .db high(" << unit_name << "_oam_" << std::dec << index << ")" << std::endl;
 
-    stream << unit_name << "_det_low:" << std::endl;
-    for (size_t index = 0; index < m_slice_vector.size(); ++index)
-        stream << "    .db low(" << unit_name << "_det_oam_" << std::dec << index << ")" << std::endl;
-    stream << unit_name << "_det_high:" << std::endl;
-    for (size_t index = 0; index < m_slice_vector.size(); ++index)
-        stream << "    .db high(" << unit_name << "_det_oam_" << std::dec << index << ")" << std::endl;
-
-    for (size_t index = 0; index < m_slice_vector.size(); ++index)
-    {
-        uint32_t cnt = 0;
-        for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
-        {
-            if (m_slice_vector[index].oam[n].mode)
-                cnt ++;
-        }
-        stream << unit_name << "_main_oam_" << std::dec << index << ":" << std::endl;
-        stream << "    .db " << std::dec << cnt << " ;main oam count" << std::endl;
-        for (int n = m_slice_vector[index].oam.size()-1; n >= 0 ; --n)
-        {
-            if (m_slice_vector[index].oam[n].mode == 0)
-                continue;
-            int y = 200 - m_slice_vector[index].height + m_slice_vector[index].oam[n].y;
-            stream << "    .db $" << std::hex << std::setw(2) << std::setfill('0') << (y&0xFF);     //y
-            stream << ", $" << std::hex << std::setw(2) << std::setfill('0') << (n * 2 | 1);            //index
-            int attr = m_slice_vector[index].oam[n].palette;
-            if (attr == 2)
-                attr = 3;
-            stream << ", $" << std::hex << std::setw(2) << std::setfill('0') << (attr); //attribute
-            stream << ", $" << std::hex << std::setw(2) << std::setfill('0') << (m_slice_vector[index].oam[n].x+100);   //x
-            stream << std::endl;
-        }
-    }
+    //stream << unit_name << "_det_low:" << std::endl;
+    //for (size_t index = 0; index < m_slice_vector.size(); ++index)
+    //    stream << "    .db low(" << unit_name << "_det_oam_" << std::dec << index << ")" << std::endl;
+    //stream << unit_name << "_det_high:" << std::endl;
+    //for (size_t index = 0; index < m_slice_vector.size(); ++index)
+    //    stream << "    .db high(" << unit_name << "_det_oam_" << std::dec << index << ")" << std::endl;
 
     for (size_t index = 0; index < m_slice_vector.size(); ++index)
     {
-        uint32_t cnt = 0;
-        for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
-        {
-            if (m_slice_vector[index].oam[n].mode == 0)
-                cnt ++;
-        }
-        stream << unit_name << "_det_oam_" << std::dec << index << ":" << std::endl;
-        stream << "    .db " << std::dec << cnt << " ;detailed oam count" << std::endl;
+        stream << unit_name << "_oam_" << std::dec << index << ":" << std::endl;
+        stream << "    .db " << std::dec << m_slice_vector[index].oam.size() << " ;oam count" << std::endl;
         for (int n = m_slice_vector[index].oam.size()-1; n >= 0 ; --n)
         {
-            if (m_slice_vector[index].oam[n].mode != 0)
-                continue;
             int y = 200 - m_slice_vector[index].height + m_slice_vector[index].oam[n].y;
             stream << "    .db $" << std::hex << std::setw(2) << std::setfill('0') << (y&0xFF);     //y
             stream << ", $" << std::hex << std::setw(2) << std::setfill('0') << (n * 2 | 1);            //index
@@ -198,16 +235,29 @@ void MainWindow::on_pushButton_export_test_clicked()
 
     for (size_t index = 0; index < m_slice_vector.size(); ++index)
     {
-        std::vector<uint8_t> chr;
-        for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
-            chr.insert(chr.end(), m_slice_vector[index].oam[n].chr_export.begin(), m_slice_vector[index].oam[n].chr_export.end());
-        chr.resize(1024, 0xFF);
-        QString fname = QString("%1_%2.bin").arg(unit_name.c_str()).arg(index);
-
-        QFile file(fname);
-        file.open(QFile::WriteOnly);
-        file.write((const char*)chr.data(), chr.size());
-        file.close();
+        {
+            std::vector<uint8_t> chr;
+            for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
+                chr.insert(chr.end(), m_slice_vector[index].oam[n].chr_export.begin(), m_slice_vector[index].oam[n].chr_export.end());
+            chr.resize(1024, 0xFF);
+            QString fname = QString("%1_%2.bin").arg(unit_name.c_str()).arg(index);
+            QFile file(fname);
+            file.open(QFile::WriteOnly);
+            file.write((const char*)chr.data(), chr.size());
+            file.close();
+        }
+        if (ui->checkBox_palette_blink->isChecked())
+        {
+            std::vector<uint8_t> chr;
+            for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
+                chr.insert(chr.end(), m_slice_vector[index].oam[n].chr_export_blink.begin(), m_slice_vector[index].oam[n].chr_export_blink.end());
+            chr.resize(1024, 0xFF);
+            QString fname = QString("%1_%2_blink.bin").arg(unit_name.c_str()).arg(index);
+            QFile file(fname);
+            file.open(QFile::WriteOnly);
+            file.write((const char*)chr.data(), chr.size());
+            file.close();
+        }
     }
 }
 

@@ -18,3 +18,12 @@ struct Palette
 
     Palette();
 };
+
+struct BlinkPalette
+{
+    uint32_t color[4*16];
+    uint8_t enable[4*16];
+    BlinkPalette();
+};
+
+uint32_t ColorAvg(uint32_t a, uint32_t b);

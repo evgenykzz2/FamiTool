@@ -24,6 +24,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    void UpdateBlinkPalette();
     void RedrawPaletteTab();
     void Image2Index(const QImage &image, std::vector<uint8_t>& index);
     void Index2Image(const std::vector<uint8_t>& index, QImage &image, int width, int height);
@@ -36,6 +37,7 @@ public:
     void AnimationTab_UpdateFrame();
     void AnimationTab_Redraw();
     void AnimationTab_FrameTick();
+    void AnimationTab_EventFilter(QObject* object, QEvent* event);
 
     void RedrawSliceTab();
     void RedrawOamTab();
@@ -86,11 +88,18 @@ private slots:
     void on_check_frame_damage_box_clicked();
     void on_btn_animation_play_clicked();
 
+    void on_check_draw_bbox_clicked();
+
+    void on_check_draw_dbox_clicked();
+
+    void on_checkBox_palette_blink_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
     EPalette m_palette;
     Palette  m_palette_set[4];
+    BlinkPalette m_blink_palette;
     QLabel*  m_palette_label[16];
     int      m_bg_color_index;
     uint32_t m_bg_color;

@@ -1,4 +1,5 @@
 #include "Palette.h"
+#include <memory.h>
 
 #define RGB(r,g,b) ( 0xFF000000 | (r << 16) | (g << 8) | (b))
 
@@ -120,4 +121,23 @@ Palette::Palette()
     c[1] = 0x0F;
     c[2] = 0x0F;
     c[3] = 0x0F;
+}
+
+uint32_t ColorAvg(uint32_t a, uint32_t b)
+{
+    uint8_t ra = (a >>  0) & 0xFF;
+    uint8_t ga = (a >>  8) & 0xFF;
+    uint8_t ba = (a >> 16) & 0xFF;
+
+    uint8_t rb = (b >>  0) & 0xFF;
+    uint8_t gb = (b >>  8) & 0xFF;
+    uint8_t bb = (b >> 16) & 0xFF;
+
+    return ((ra+rb)/2) | ((ga+gb)/2 << 8) | ((ba+bb)/2 << 16) | (0xFF000000);
+}
+
+BlinkPalette::BlinkPalette()
+{
+    memset(color, 0, sizeof(color));
+    memset(enable, 1, sizeof(enable));
 }

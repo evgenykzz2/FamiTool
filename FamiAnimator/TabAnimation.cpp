@@ -13,6 +13,9 @@ static QLabel* s_animation_tab_render;
 static int s_animation_tab_zoom = 4;
 static qint64 s_animation_start_time = 0;
 static qint64 s_animation_time = 0;
+static int s_grab_corner = -1;
+static int s_grab_x = -1;
+static int s_grab_y = -1;
 
 void MainWindow::AnimationTab_Init()
 {
@@ -38,10 +41,12 @@ void MainWindow::AnimationTab_Reload()
     ui->combo_animation_slice->clear();
     for (size_t n = 0; n < m_slice_vector.size(); ++n)
         ui->combo_animation_slice->addItem(m_slice_vector[n].caption);
-    ui->combo_animation_slice->blockSignals(false);
 
     if (index >= ui->combo_animation->count())
         index = 0;
+    ui->combo_animation->setCurrentIndex(index);
+    ui->combo_animation_slice->blockSignals(false);
+
     on_combo_animation_currentIndexChanged(index);
     s_animation_start_time = m_elapsed_timer.elapsed();
 }
@@ -309,6 +314,133 @@ void MainWindow::AnimationTab_FrameTick()
     }
 }
 
+void MainWindow::on_check_draw_bbox_clicked()
+{
+    AnimationTab_Redraw();
+}
+
+void MainWindow::on_check_draw_dbox_clicked()
+{
+    AnimationTab_Redraw();
+}
+
+void MainWindow::AnimationTab_EventFilter(QObject* object, QEvent* event)
+{
+    static const int SEL = 1;
+    if (object == s_animation_tab_render)
+    {
+        int index = ui->combo_animation->currentIndex();
+        int frame = ui->slider_animation_frame->value();
+
+        if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)
+        {
+            QMouseEvent* mouse_event = (QMouseEvent*)event;
+            int x = mouse_event->x() / s_animation_tab_zoom;
+            int y = mouse_event->y() / s_animation_tab_zoom;
+
+            if (event->type() == QEvent::MouseButtonPress && mouse_event->button() == Qt::LeftButton)
+            {
+                s_grab_x = x;
+                s_grab_y = y;
+            }
+            if (event->type() == QEvent::MouseButtonRelease)
+                s_grab_corner = -1;
+
+            if ( !m_spriteset_indexed_alpha.isNull()
+                 && index < m_animation.size() && frame < m_animation[index].frames.size())
+            {
+                if (ui->check_draw_bbox->isChecked())
+                {
+                    if (   x >= 64+m_animation[index].frames[frame].bound_box_x     && y >= 64+m_animation[index].frames[frame].bound_box_y
+                        && x <= 64+m_animation[index].frames[frame].bound_box_x+SEL && y <= 64+m_animation[index].frames[frame].bound_box_y + SEL)
+                    {
+                        if (event->type() == QEvent::MouseButtonPress)
+                            s_grab_corner = 0;
+                        if (s_grab_corner == -1)
+                            s_animation_tab_render->setCursor(Qt::SizeFDiagCursor);
+                    } else if (   x >= 64+m_animation[index].frames[frame].bound_box_x + m_animation[index].frames[frame].bound_box_width-1
+                               && y >= 64+m_animation[index].frames[frame].bound_box_y + m_animation[index].frames[frame].bound_box_height-1
+                               && x <= 64+m_animation[index].frames[frame].bound_box_x + m_animation[index].frames[frame].bound_box_width-1 + SEL
+                               && y <= 64+m_animation[index].frames[frame].bound_box_y + m_animation[index].frames[frame].bound_box_height-1 + SEL
+                                  )
+                    {
+                        if (event->type() == QEvent::MouseButtonPress)
+                            s_grab_corner = 1;
+                        if (s_grab_corner == -1)
+                            s_animation_tab_render->setCursor(Qt::SizeFDiagCursor);
+                    } else if (   x >= 64+m_animation[index].frames[frame].bound_box_x + m_animation[index].frames[frame].bound_box_width-1
+                               && y >= 64+m_animation[index].frames[frame].bound_box_y
+                               && x <= 64+m_animation[index].frames[frame].bound_box_x + m_animation[index].frames[frame].bound_box_width-1 + SEL
+                               && y <= 64+m_animation[index].frames[frame].bound_box_y + SEL)
+                    {
+                        if (event->type() == QEvent::MouseButtonPress)
+                            s_grab_corner = 2;
+                        if (s_grab_corner == -1)
+                            s_animation_tab_render->setCursor(Qt::SizeBDiagCursor);
+                    } else if (   x >= 64+m_animation[index].frames[frame].bound_box_x
+                               && y >= 64+m_animation[index].frames[frame].bound_box_y + m_animation[index].frames[frame].bound_box_height-1
+                               && x <= 64+m_animation[index].frames[frame].bound_box_x + SEL
+                               && y <= 64+m_animation[index].frames[frame].bound_box_y + m_animation[index].frames[frame].bound_box_height-1 + SEL)
+                    {
+                        if (event->type() == QEvent::MouseButtonPress)
+                            s_grab_corner = 3;
+                        if (s_grab_corner == -1)
+                            s_animation_tab_render->setCursor(Qt::SizeBDiagCursor);
+                    } else
+                    {
+                        if (event->type() == QEvent::MouseButtonPress)
+                            s_grab_corner=-1;
+                        if (s_grab_corner == -1)
+                            s_animation_tab_render->setCursor(Qt::ArrowCursor);
+                    }
+
+                    if (event->type() == QEvent::MouseMove && (int)(mouse_event->buttons() & Qt::LeftButton) != 0
+                        && (s_grab_x != x || s_grab_y != y))
+                    {
+                        int dx = x - s_grab_x;
+                        int dy = y - s_grab_y;
+                        if (s_grab_corner == 0)
+                        {
+                            m_animation[index].frames[frame].bound_box_x += dx;
+                            m_animation[index].frames[frame].bound_box_y += dy;
+                            m_animation[index].frames[frame].bound_box_width -= dx;
+                            m_animation[index].frames[frame].bound_box_height -= dy;
+                            AnimationTab_Redraw();
+                        } else if (s_grab_corner == 1)
+                        {
+                            m_animation[index].frames[frame].bound_box_width += dx;
+                            m_animation[index].frames[frame].bound_box_height += dy;
+                            AnimationTab_Redraw();
+                        } else if (s_grab_corner == 2)
+                        {
+                            m_animation[index].frames[frame].bound_box_y += dy;
+                            m_animation[index].frames[frame].bound_box_width += dx;
+                            m_animation[index].frames[frame].bound_box_height -= dy;
+                            AnimationTab_Redraw();
+                        } else if (s_grab_corner == 3)
+                        {
+                            m_animation[index].frames[frame].bound_box_x += dx;
+                            m_animation[index].frames[frame].bound_box_width -= dx;
+                            m_animation[index].frames[frame].bound_box_height += dy;
+                            AnimationTab_Redraw();
+                        }
+                        s_grab_x = x;
+                        s_grab_y = y;
+                    }
+                } else
+                {
+                    s_grab_corner=-1;
+                }
+            } else
+            {
+                s_animation_tab_render->setCursor(Qt::ArrowCursor);
+                s_grab_corner=-1;
+            }
+        }
+        return;
+    }
+}
+
 void MainWindow::AnimationTab_Redraw()
 {
     QImage image(128, 128, QImage::Format_ARGB32);
@@ -344,6 +476,24 @@ void MainWindow::AnimationTab_Redraw()
                               m_spriteset_indexed_alpha,
                               m_slice_vector[slice_index].x, m_slice_vector[slice_index].y,
                               m_slice_vector[slice_index].width, m_slice_vector[slice_index].height);
+            if (ui->check_draw_dbox->isChecked() && m_animation[index].frames[frame].damage_box)
+            {
+                painter.setPen(QPen(QColor(255, 0, 0, 255)));
+                painter.setBrush(Qt::NoBrush);
+                painter.drawRect(64+m_animation[index].frames[frame].damage_box_x,
+                                 64+m_animation[index].frames[frame].damage_box_y,
+                                 m_animation[index].frames[frame].damage_box_width-1,
+                                 m_animation[index].frames[frame].damage_box_height-1);
+            }
+            if (ui->check_draw_bbox->isChecked())
+            {
+                painter.setPen(QPen(QColor(0, 255, 0, 255)));
+                painter.setBrush(Qt::NoBrush);
+                painter.drawRect(64+m_animation[index].frames[frame].bound_box_x,
+                                 64+m_animation[index].frames[frame].bound_box_y,
+                                 m_animation[index].frames[frame].bound_box_width-1,
+                                 m_animation[index].frames[frame].bound_box_height-1);
+            }
         }
     }
 

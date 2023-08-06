@@ -662,6 +662,15 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 else
                     RedrawOamTab();
             }
+            if(key->key() == Qt::Key_Delete)
+            {
+                if (m_oam_selected >= 0)
+                {
+                    m_oam_vector.erase(m_oam_vector.begin() + m_oam_selected);
+                    m_oam_selected = -1;
+                    RedrawOamTab();
+                }
+            }
         }
     }
     if (object == s_attribute_tab_render)
@@ -1112,7 +1121,7 @@ void MainWindow::LoadProject(const QString &file_name)
             m_spriteset_file_name.clear();
         } else
         {
-            ui->lineEdit_sprite_image->setText(file_name);
+            ui->lineEdit_sprite_image->setText(m_spriteset_file_name);
         }
     }
 
@@ -1727,6 +1736,8 @@ void MainWindow::RedrawOamTab()
                             if (ui->radioButton_oam_draw_result->isChecked())
                                 render_line[xp] = m_blink_palette_sprite.color[color_index];
                             //modify background pixel to 0
+                            if (m_oam_vector[n].y + y < m_image_indexed.height() &&
+                                m_oam_vector[n].x + x < m_image_indexed.width() )
                             {
                                 int tile_y  = (m_oam_vector[n].y + y) / 8;
                                 int tile_dy = (m_oam_vector[n].y + y) % 8;

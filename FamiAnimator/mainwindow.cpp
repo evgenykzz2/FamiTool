@@ -14,6 +14,7 @@ static QLabel* s_palette_tab_render;
 static QLabel* s_slice_tab_render;
 static QLabel* s_oam_tab_render;
 static const int s_corner_size = 8;
+static const int s_blink_palette_block_size = 24;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -60,6 +61,9 @@ MainWindow::MainWindow(QWidget *parent)
     ui->comboBox_sprite_mode->addItem("8x8", QVariant((int)SpriteMode_8x8));
     ui->comboBox_sprite_mode->addItem("8x16", QVariant((int)SpriteMode_8x16));
     ui->comboBox_sprite_mode->blockSignals(false);
+
+    ui->widget_blink_palette->setVisible(ui->checkBox_palette_blink->isChecked());
+    ui->label_palette_blink->installEventFilter(this);
 
     on_comboBox_palette_mode_currentIndexChanged(0);
 
@@ -142,7 +146,41 @@ void MainWindow::on_comboBox_palette_mode_currentIndexChanged(int index)
         ui->label_global_bg_color->setPixmap(QPixmap::fromImage(image));
     }
 
+    if (ui->checkBox_palette_blink->isChecked())
+        UpdateBlinkPalette();
+
     RedrawPaletteTab();
+}
+
+void MainWindow::UpdateBlinkPalette()
+{
+    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
+    QImage image_sprites(s_blink_palette_block_size*16+1, s_blink_palette_block_size*4+1, QImage::Format_ARGB32);
+    image_sprites.fill(0);
+    {
+        QPainter painter_sp(&image_sprites);
+        for (int y = 0; y < 4; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                int a = x / 4;
+                int b = x % 4;
+                m_blink_palette.color[y*16 + x] = ColorAvg(palette[m_palette_set[y].c[a]], palette[m_palette_set[y].c[b]]);
+                painter_sp.setPen(QColor((uint32_t)0));
+                painter_sp.setBrush(QColor(m_blink_palette.color[y*16 + x]));
+                painter_sp.drawRect(x*s_blink_palette_block_size, y*s_blink_palette_block_size, s_blink_palette_block_size, s_blink_palette_block_size);
+                if (m_blink_palette.enable[y*16+x] == 0)
+                {
+                    painter_sp.setPen(Qt::red);
+                    painter_sp.drawLine(x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                    painter_sp.drawLine(x*s_blink_palette_block_size+s_blink_palette_block_size-1, y*s_blink_palette_block_size+1, x*s_blink_palette_block_size+1, y*s_blink_palette_block_size+s_blink_palette_block_size-1);
+                }
+            }
+        }
+    }
+    ui->label_palette_blink->setPixmap(QPixmap::fromImage(image_sprites));
+    ui->label_palette_blink->setMinimumSize(image_sprites.size());
+    ui->label_palette_blink->setMaximumSize(image_sprites.size());
 }
 
 void MainWindow::Image2Index(const QImage &image, std::vector<uint8_t>& index)
@@ -204,17 +242,35 @@ void MainWindow::Index2Image(const std::vector<uint8_t>& index, QImage &image, i
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     if (image.width() != width || image.height() != height)
         image = QImage(width, height, QImage::Format_ARGB32);
-    for (int y = 0; y < height; ++y)
+    if (ui->checkBox_palette_blink->isChecked())
     {
-        uchar* line_ptr = image.scanLine(y);
-        const uint8_t* index_ptr = index.data() + y*width;
-        for (int x = 0; x < width; ++x)
+        for (int y = 0; y < height; ++y)
         {
-            int c = index_ptr[x];
-            if (c == 0)
-                ((uint32_t*)line_ptr)[x] = m_bg_color;
-            else
-                ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
+            uchar* line_ptr = image.scanLine(y);
+            const uint8_t* index_ptr = index.data() + y*width;
+            for (int x = 0; x < width; ++x)
+            {
+                int c = index_ptr[x];
+                if (c == 0)
+                    ((uint32_t*)line_ptr)[x] = m_bg_color;
+                else
+                    ((uint32_t*)line_ptr)[x] = m_blink_palette.color[c];
+            }
+        }
+    } else
+    {
+        for (int y = 0; y < height; ++y)
+        {
+            uchar* line_ptr = image.scanLine(y);
+            const uint8_t* index_ptr = index.data() + y*width;
+            for (int x = 0; x < width; ++x)
+            {
+                int c = index_ptr[x];
+                if (c == 0)
+                    ((uint32_t*)line_ptr)[x] = m_bg_color;
+                else
+                    ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
+            }
         }
     }
 }
@@ -224,17 +280,35 @@ void MainWindow::Index2ImageAlpha(const std::vector<uint8_t>& index, QImage &ima
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     if (image.width() != width || image.height() != height)
         image = QImage(width, height, QImage::Format_ARGB32);
-    for (int y = 0; y < height; ++y)
+    if (ui->checkBox_palette_blink->isChecked())
     {
-        uchar* line_ptr = image.scanLine(y);
-        const uint8_t* index_ptr = index.data() + y*width;
-        for (int x = 0; x < width; ++x)
+        for (int y = 0; y < height; ++y)
         {
-            int c = index_ptr[x];
-            if (c == 0)
-                ((uint32_t*)line_ptr)[x] = 0x00000000;
-            else
-                ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
+            uchar* line_ptr = image.scanLine(y);
+            const uint8_t* index_ptr = index.data() + y*width;
+            for (int x = 0; x < width; ++x)
+            {
+                int c = index_ptr[x];
+                if (c == 0)
+                    ((uint32_t*)line_ptr)[x] = 0x00000000;
+                else
+                    ((uint32_t*)line_ptr)[x] = m_blink_palette.color[c];
+            }
+        }
+    } else
+    {
+        for (int y = 0; y < height; ++y)
+        {
+            uchar* line_ptr = image.scanLine(y);
+            const uint8_t* index_ptr = index.data() + y*width;
+            for (int x = 0; x < width; ++x)
+            {
+                int c = index_ptr[x];
+                if (c == 0)
+                    ((uint32_t*)line_ptr)[x] = 0x00000000;
+                else
+                    ((uint32_t*)line_ptr)[x] = palette[m_palette_set[c >> 2].c[c & 3]];
+            }
         }
     }
 }
@@ -297,6 +371,18 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
             connect(&m_pick_color_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteWindow_Slot_BgPaletteSelect(int)), Qt::UniqueConnection);
             m_pick_color_dialog.exec();
         }
+
+        if (object == ui->label_palette_blink)
+        {
+            QMouseEvent* mouse_event = (QMouseEvent*)event;
+            int x = mouse_event->x()/(s_blink_palette_block_size);
+            int y = mouse_event->y()/(s_blink_palette_block_size);
+            if (x < 16 && y < 4)
+            {
+                m_blink_palette.enable[x + y*16] ^= 1;
+                UpdateBlinkPalette();
+            }
+        }
     }
     if (object == s_palette_tab_render)
     {
@@ -318,7 +404,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                         index = itt->second;
                     m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
                     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                    m_pick_fami_palette_dialog.SetPalette(palette, m_palette_set);
+                    m_pick_fami_palette_dialog.SetPalette(palette, m_palette_set, ui->checkBox_palette_blink->isChecked(), m_blink_palette);
                     m_pick_fami_palette_dialog.SetPaletteIndex(index);
                     m_pick_fami_palette_dialog.UpdatePalette();
                     m_pick_fami_palette_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
@@ -714,6 +800,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
             }
         }
     }
+    if (ui->tabWidget->currentWidget() == ui->tab_Animation)
+        AnimationTab_EventFilter(object, event);
     return QWidget::eventFilter( object, event );
 }
 
@@ -730,6 +818,9 @@ void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     image.fill(palette[m_palette_set[m_pick_pallete_index/4].c[m_pick_pallete_index & 3]]);
     m_palette_label[m_pick_pallete_index]->setPixmap(QPixmap::fromImage(image));
+
+    if (ui->checkBox_palette_blink->isChecked())
+        UpdateBlinkPalette();
 }
 
 void MainWindow::PaletteWindow_Slot_BgPaletteSelect(int index)
@@ -862,6 +953,8 @@ void MainWindow::SaveProject(const QString &file_name)
 
     json.get<picojson::object>()["sprite_set"] = picojson::value( m_spriteset_file_name.toUtf8().toBase64().data() );
 
+    json.get<picojson::object>()["palette_blink"] = picojson::value( ui->checkBox_palette_blink->isChecked() ? 1.0 : 0.0 );
+
     picojson::array items = picojson::array();
     for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
     {
@@ -947,6 +1040,16 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["animation"] = picojson::value(items);
     }
 
+    if (ui->checkBox_palette_blink->isChecked())
+    {
+        for (size_t n = 0; n < 16*4; ++n)
+        {
+            QString name = QString("blink_pal_%1").arg(n);
+            if (m_blink_palette.enable[n])
+                json.get<picojson::object>()[name.toStdString()] = picojson::value( 1.0 );
+        }
+    }
+
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
     file.open(QFile::WriteOnly);
@@ -1011,8 +1114,22 @@ void MainWindow::LoadProject(const QString &file_name)
     ui->comboBox_sprite_mode->blockSignals(false);
 
     if (json.contains("background_color"))
-    {
         m_bg_color_index = json.get<picojson::object>()["background_color"].get<double>();
+
+    if (json.contains("palette_blink"))
+         ui->checkBox_palette_blink->setChecked(json.get<picojson::object>()["background_color"].get<double>());
+    ui->widget_blink_palette->setVisible(ui->checkBox_palette_blink->isChecked());
+
+    if (ui->checkBox_palette_blink->isChecked())
+    {
+        for (size_t n = 0; n < 16*4; ++n)
+        {
+            QString name = QString("blink_pal_%1").arg(n);
+            if (json.contains(name.toStdString()))
+                m_blink_palette.enable[n] = (int)json.get<picojson::object>()[name.toStdString()].get<double>();
+            else
+                m_blink_palette.enable[n] = 0;
+        }
     }
 
     m_spriteset_file_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["sprite_set"].get<std::string>().c_str()));
@@ -1304,6 +1421,8 @@ void MainWindow::RedrawOamTab()
     ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
     int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
 
+    bool blink = ui->checkBox_palette_blink->isChecked();
+
     QImage cut = m_spriteset_indexed.copy(m_slice_vector[index].x, m_slice_vector[index].y, m_slice_vector[index].width, m_slice_vector[index].height);
     QImage render(cut.width()*6, cut.height(), QImage::Format_ARGB32);
     render.fill(m_bg_color);
@@ -1332,37 +1451,77 @@ void MainWindow::RedrawOamTab()
                 if (scan_line[xp] == m_bg_color)
                     continue;
                 uint32_t color = scan_line[xp];
-                if (color == palette[pal.c[1]])
+                if (blink)
                 {
-                    render_line[xp + cut.width()*5] = color;
-                    render_line[xp + cut.width()*(pindex+1)] = color;
-                } else if (color == palette[pal.c[2]])
-                {
-                    render_line[xp + cut.width()*5] = color;
-                    render_line[xp + cut.width()*(pindex+1)] = color;
-                } else if (color == palette[pal.c[3]])
-                {
-                    render_line[xp + cut.width()*5] = color;
-                    render_line[xp + cut.width()*(pindex+1)] = color;
-                } else if (m_slice_vector[index].oam[n].mode != 0)
-                {
-                    //Find any Color
-                    int64_t best_diff = INT64_MAX;
-                    int best_c = 1;
-                    for (int c = 1; c < 4; ++c)
+                    int found = -1;
+                    for (int i = 0; i < 16; ++i)
                     {
-                        int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
-                        int dg = ((color >> 8) & 0xFF) -  ((palette[pal.c[c]] >> 8) & 0xFF);
-                        int db = ((color >> 16) & 0xFF) - ((palette[pal.c[c]] >> 16) & 0xFF);
-                        int64_t diff = dr*dr + dg*dg + db*db;
-                        if (diff < best_diff)
+                        if (!m_blink_palette.enable[pindex*16+i])
+                            continue;
+                        if (color == m_blink_palette.color[pindex*16+i])
                         {
-                            best_diff = diff;
-                            best_c = c;
+                            found = i;
+                            break;
                         }
                     }
-                    render_line[xp + cut.width()*5] = palette[pal.c[best_c]];
-                    render_line[xp + cut.width()*(pindex+1)] = palette[pal.c[best_c]];
+                    if (found < 0 && m_slice_vector[index].oam[n].mode != 0)
+                    {
+                        //Find any Color
+                        int64_t best_diff = INT64_MAX;
+                        for (int c = 0; c < 16; ++c)
+                        {
+                            if (!m_blink_palette.enable[pindex*16+c])
+                                continue;
+                            int dr = (color & 0xFF) - (m_blink_palette.color[pindex*16+c] & 0xFF);
+                            int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette.color[pindex*16+c] >> 8) & 0xFF);
+                            int db = ((color >> 16) & 0xFF) - ((m_blink_palette.color[pindex*16+c] >> 16) & 0xFF);
+                            int64_t diff = dr*dr + dg*dg + db*db;
+                            if (diff < best_diff)
+                            {
+                                best_diff = diff;
+                                found = c;
+                            }
+                        }
+                    }
+                    if (found >= 0)
+                    {
+                        render_line[xp + cut.width()*5] = m_blink_palette.color[pindex*16+found];
+                        render_line[xp + cut.width()*(pindex+1)] = m_blink_palette.color[pindex*16+found];
+                    }
+                } else
+                {
+                    if (color == palette[pal.c[1]])
+                    {
+                        render_line[xp + cut.width()*5] = color;
+                        render_line[xp + cut.width()*(pindex+1)] = color;
+                    } else if (color == palette[pal.c[2]])
+                    {
+                        render_line[xp + cut.width()*5] = color;
+                        render_line[xp + cut.width()*(pindex+1)] = color;
+                    } else if (color == palette[pal.c[3]])
+                    {
+                        render_line[xp + cut.width()*5] = color;
+                        render_line[xp + cut.width()*(pindex+1)] = color;
+                    } else if (m_slice_vector[index].oam[n].mode != 0)
+                    {
+                        //Find any Color
+                        int64_t best_diff = INT64_MAX;
+                        int best_c = 1;
+                        for (int c = 1; c < 4; ++c)
+                        {
+                            int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
+                            int dg = ((color >> 8) & 0xFF) -  ((palette[pal.c[c]] >> 8) & 0xFF);
+                            int db = ((color >> 16) & 0xFF) - ((palette[pal.c[c]] >> 16) & 0xFF);
+                            int64_t diff = dr*dr + dg*dg + db*db;
+                            if (diff < best_diff)
+                            {
+                                best_diff = diff;
+                                best_c = c;
+                            }
+                        }
+                        render_line[xp + cut.width()*5] = palette[pal.c[best_c]];
+                        render_line[xp + cut.width()*(pindex+1)] = palette[pal.c[best_c]];
+                    }
                 }
             }
         }
@@ -1490,5 +1649,14 @@ void MainWindow::on_comboBox_slice_list_currentIndexChanged(int index)
     ui->lineEdit_slice_name->setText(m_slice_vector[m_slice_selected].caption);
     ui->lineEdit_slice_name->setEnabled(true);
     RedrawSliceTab();
+}
+
+
+
+void MainWindow::on_checkBox_palette_blink_clicked()
+{
+    ui->widget_blink_palette->setVisible(ui->checkBox_palette_blink->isChecked());
+    if (ui->checkBox_palette_blink->isChecked())
+        UpdateBlinkPalette();
 }
 

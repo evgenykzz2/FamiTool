@@ -42,11 +42,11 @@ main_reset:
 	iny
 	iny
 	sty $8001
+	
 	;2
 	inx
 	stx $8000
-	iny
-	iny
+	ldy #$08
 	sty $8001
 	;3
 	inx
@@ -126,7 +126,7 @@ main_reset:
 		bne .palette_loop
 		
 	;Load OAM
-	ldx #(120-1)
+	ldx #(128-1)
 	.oam_loop:
 		;x
 		lda screen_jax_oam, x
