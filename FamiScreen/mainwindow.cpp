@@ -1005,6 +1005,14 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["oam"] = picojson::value(items);
     }
 
+    int irq0 = ui->edit_irq_0->text().toInt();
+    if (irq0 != 0)
+        json.get<picojson::object>()["irq0"] = picojson::value( (double)irq0 );
+
+    int irq1 = ui->edit_irq_1->text().toInt();
+    if (irq1 != 0)
+        json.get<picojson::object>()["irq1"] = picojson::value( (double)irq1 );
+
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
     file.open(QFile::WriteOnly);
@@ -1194,6 +1202,16 @@ void MainWindow::LoadProject(const QString &file_name)
                 m_blink_palette_sprite.enable[n] = 0;
         }
     }
+
+    if (json.contains("irq0"))
+        ui->edit_irq_0->setText( QString("%1").arg( (int)(json.get<picojson::object>()["irq0"].get<double>()) ));
+    else
+        ui->edit_irq_0->setText("0");
+
+    if (json.contains("irq1"))
+        ui->edit_irq_1->setText( QString("%1").arg( (int)(json.get<picojson::object>()["irq1"].get<double>()) ));
+    else
+        ui->edit_irq_1->setText("0");
 
     m_oam_vector.clear();
     if (json.contains("oam"))
@@ -1466,26 +1484,80 @@ void MainWindow::RedrawAttributeTab()
         }
     }
 
+
+    int irq0 = ui->edit_irq_0->text().toInt();
+    int irq1 = ui->edit_irq_1->text().toInt();
+
     //m_image_screen = m_image_screen.copy(0, 0, 256, 240);
-    std::set<std::vector<uint8_t>> tile_set;
-    for (size_t n = 0; n < 32*30; ++n)
+    std::set<std::vector<uint8_t>> tile_set0;
+    std::set<std::vector<uint8_t>> tile_set1;
+    std::set<std::vector<uint8_t>> tile_set2;
+
+    for (size_t y = 0; y < 30; ++y)
     {
-        std::vector<uint8_t> tile(16);
-        memcpy(tile.data(), m_screen_tiles.data() + n*16, 16);
-        tile_set.insert(tile);
-    }
-    if (ui->checkBox_two_frames_blinking->isChecked())
-    {
-        std::set<std::vector<uint8_t>> tile_set_blink;
-        for (size_t n = 0; n < 32*30; ++n)
+        for (size_t x = 0; x < 32; ++x)
         {
             std::vector<uint8_t> tile(16);
-            memcpy(tile.data(), m_screen_tiles_blink.data() + n*16, 16);
-            tile_set_blink.insert(tile);
+            memcpy(tile.data(), m_screen_tiles.data() + (x+y*32)*16, 16);
+            if (irq1 == 0 && irq0 == 0)
+            {
+                tile_set0.insert(tile);
+            } else if (irq0 != 0 && irq1 == 0)
+            {
+                if (y*8 < irq0)
+                    tile_set0.insert(tile);
+                else
+                    tile_set1.insert(tile);
+            } else
+            {
+                if (y*8 < irq0)
+                    tile_set0.insert(tile);
+                else if (y*8 < irq1)
+                    tile_set1.insert(tile);
+                else
+                    tile_set2.insert(tile);
+            }
         }
-        ui->label_attribute_tiles->setText(QString("%1+%2 Tiles").arg(tile_set.size()).arg(tile_set_blink.size()));
+    }
+
+    if (ui->checkBox_two_frames_blinking->isChecked())
+    {
+        std::set<std::vector<uint8_t>> tile_set_b0;
+        std::set<std::vector<uint8_t>> tile_set_b1;
+        std::set<std::vector<uint8_t>> tile_set_b2;
+        for (size_t y = 0; y < 30; ++y)
+        {
+            for (size_t x = 0; x < 32; ++x)
+            {
+                std::vector<uint8_t> tile(16);
+                memcpy(tile.data(), m_screen_tiles.data() + (x+y*32)*16, 16);
+                if (irq1 == 0 && irq0 == 0)
+                {
+                    tile_set_b0.insert(tile);
+                } else if (irq0 != 0 && irq1 == 0)
+                {
+                    if (y*8 < irq0)
+                        tile_set_b0.insert(tile);
+                    else
+                        tile_set_b1.insert(tile);
+                } else
+                {
+                    if (y*8 < irq0)
+                        tile_set_b0.insert(tile);
+                    else if (y*8 < irq1)
+                        tile_set_b1.insert(tile);
+                    else
+                        tile_set_b2.insert(tile);
+                }
+            }
+        }
+        ui->label_attribute_tiles->setText(QString("Tiles: %1+%2 %3+%4 %5+%6")
+                                           .arg(tile_set0.size()).arg(tile_set_b0.size())
+                                           .arg(tile_set1.size()).arg(tile_set_b1.size())
+                                           .arg(tile_set2.size()).arg(tile_set_b2.size())
+                                           );
     } else
-        ui->label_attribute_tiles->setText(QString("%1 Tiles").arg(tile_set.size()));
+        ui->label_attribute_tiles->setText(QString("Tiles: %1 %2 %3").arg(tile_set0.size()).arg(tile_set1.size()).arg(tile_set2.size()));
 
     /*{
         QFile file("tiles.bin");
@@ -1503,6 +1575,22 @@ void MainWindow::RedrawAttributeTab()
         for (int x = 16; x < 256; x += 16)
             painter.drawLine(x*m_attribute_tab_zoom, 0, x*m_attribute_tab_zoom, image.height());
     }
+
+    int edit_irq_0 = ui->edit_irq_0->text().toInt();
+    if (edit_irq_0 != 0)
+    {
+        QPainter painter(&image);
+        painter.setPen(QColor(0xFFFF0000));
+        painter.drawLine(0, edit_irq_0*m_attribute_tab_zoom, image.width(), edit_irq_0*m_attribute_tab_zoom);
+    }
+    int edit_irq_1 = ui->edit_irq_1->text().toInt();
+    if (edit_irq_1 != 0)
+    {
+        QPainter painter(&image);
+        painter.setPen(QColor(0xFFFF0000));
+        painter.drawLine(0, edit_irq_1*m_attribute_tab_zoom, image.width(), edit_irq_1*m_attribute_tab_zoom);
+    }
+
     s_attribute_tab_render->setPixmap(QPixmap::fromImage(image));
     s_attribute_tab_render->resize(image.width(), image.height());
     s_attribute_tab_render->setMaximumSize(image.width(), image.height());
@@ -1570,8 +1658,12 @@ void MainWindow::RedrawOamTab()
             m_oam_vector[n].chr_export.resize(sprite_height*2);
             memset(m_oam_vector[n].chr_export.data(), 0, m_oam_vector[n].chr_export.size());
 
-            m_oam_vector[n].chr_export_blink.resize(sprite_height*2);
-            memset(m_oam_vector[n].chr_export_blink.data(), 0, m_oam_vector[n].chr_export_blink.size());
+            if (ui->checkBox_two_frames_blinking->isChecked())
+            {
+                m_oam_vector[n].chr_export_blink.resize(sprite_height*2);
+                memset(m_oam_vector[n].chr_export_blink.data(), 0, m_oam_vector[n].chr_export_blink.size());
+            } else
+                m_oam_vector[n].chr_export_blink.resize(0);
 
             Palette pal = m_palette_sprite[pindex];
             for (int y = 0; y < sprite_height; ++y)
@@ -1796,23 +1888,23 @@ void MainWindow::RedrawOamTab()
                         //if (scan_line[xp] == m_bg_color)
                         //    continue;
                         uint32_t color = scan_line[xp] & 0x00FFFFFF;
-                        auto itt = m_palette_cvt_rule.find(color);
-                        if (itt != m_palette_cvt_rule.end())
+                        auto itt = m_palette_sprite_cvt_rule.find(color);
+                        int best_index = 0;
+                        if (itt != m_palette_sprite_cvt_rule.end())
                         {
-                            if (itt->second == pindex*4 + 1)
+                            uint32_t color_cvt =  palette[m_palette_sprite[itt->second/4].c[itt->second%4]];
+                            for (int i = 1; i < 4; ++i)
                             {
-                                render_line[xp] = palette[pal.c[1]];
-                            } else if (itt->second == pindex*4 + 2)
-                            {
-                                render_line[xp] = palette[pal.c[2]];
-                            } else if (itt->second == pindex*4 + 3)
-                            {
-                                render_line[xp] = palette[pal.c[3]];
-                            } else if (m_oam_vector[n].mode != 0)
+                                if (color_cvt == palette[pal.c[i]])
+                                {
+                                    best_index = i;
+                                    break;
+                                }
+                            }
+                            if (m_oam_vector[n].mode != 0 && best_index == 0)
                             {
                                 //Find any Color
                                 int64_t best_diff = INT64_MAX;
-                                int best_c = 1;
                                 for (int c = 1; c < 4; ++c)
                                 {
                                     int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
@@ -1822,27 +1914,24 @@ void MainWindow::RedrawOamTab()
                                     if (diff < best_diff)
                                     {
                                         best_diff = diff;
-                                        best_c = c;
+                                        best_index = c;
                                     }
                                 }
-                                render_line[xp] = palette[pal.c[best_c]];
                             }
                         } else
                         {
-                            if (color == palette[pal.c[1]])
+                            for (int i = 1; i < 4; ++i)
                             {
-                                render_line[xp] = color;
-                            } else if (color == palette[pal.c[2]])
-                            {
-                                render_line[xp] = color;
-                            } else if (color == palette[pal.c[3]])
-                            {
-                                render_line[xp] = color;
-                            } else if (m_oam_vector[n].mode != 0)
+                                if (color == palette[pal.c[i]])
+                                {
+                                    best_index = i;
+                                    break;
+                                }
+                            }
+                            if (m_oam_vector[n].mode != 0 && best_index == 0)
                             {
                                 //Find any Color
                                 int64_t best_diff = INT64_MAX;
-                                int best_c = 1;
                                 for (int c = 1; c < 4; ++c)
                                 {
                                     int dr = (color & 0xFF) - (palette[pal.c[c]] & 0xFF);
@@ -1852,10 +1941,26 @@ void MainWindow::RedrawOamTab()
                                     if (diff < best_diff)
                                     {
                                         best_diff = diff;
-                                        best_c = c;
+                                        best_index = c;
                                     }
                                 }
-                                render_line[xp] = palette[pal.c[best_c]];
+                            }
+                        }
+
+                        if (best_index != 0)
+                        {
+                            if (ui->radioButton_oam_draw_result->isChecked())
+                                render_line[xp] = palette[pal.c[best_index]];
+                            int ofs = (y < 8) ? 0 : 16;
+                            int y0 = y < 8 ? y : y-8;
+                            if (best_index == 1)
+                                m_oam_vector[n].chr_export[ofs + y0] |= 0x80 >> x;
+                            else if (best_index == 2)
+                                m_oam_vector[n].chr_export[ofs + y0 + 8] |= 0x80 >> x;
+                            else if (best_index == 3)
+                            {
+                                m_oam_vector[n].chr_export[ofs + y0] |= 0x80 >> x;
+                                m_oam_vector[n].chr_export[ofs + y0 + 8] |= 0x80 >> x;
                             }
                         }
                     }
@@ -1997,3 +2102,14 @@ void MainWindow::on_checkBox_two_frames_blinking_clicked()
     ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
 }
 
+
+void MainWindow::on_edit_irq_0_editingFinished()
+{
+    RedrawAttributeTab();
+}
+
+
+void MainWindow::on_edit_irq_1_editingFinished()
+{
+    RedrawAttributeTab();
+}

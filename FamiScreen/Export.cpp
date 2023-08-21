@@ -214,9 +214,9 @@ void MainWindow::on_pushButton_export_clicked()
         }
     }
 
-    std::map<std::vector<uint8_t>, int> tile_map;
-    std::vector<uint8_t> tile_vector;
-    std::vector<uint8_t> tile_vector_blink;
+    std::map<std::vector<uint8_t>, int> tile_map[4];
+    std::vector<uint8_t> tile_vector[4];
+    std::vector<uint8_t> tile_vector_blink[4];
     std::vector<uint8_t> nametable(1024, 0);
 
     std::vector<uint8_t> zero_tile;
@@ -233,41 +233,64 @@ void MainWindow::on_pushButton_export_clicked()
         //tile_vector.insert(tile_vector.end(), zero_tile.begin(), zero_tile.end());
     }
 
-    for (size_t n = 0; n < 32*30; ++n)
+    int irq0 = ui->edit_irq_0->text().toInt();
+    int irq1 = ui->edit_irq_1->text().toInt();
+
+    for (size_t y = 0; y < 30; ++y)
     {
-        std::vector<uint8_t> tile;
-        if (ui->checkBox_two_frames_blinking->isChecked())
+        size_t slot = 0;
+        if (irq0 != 0 && irq1 == 0)
         {
-            tile.resize(32);
-            memcpy(tile.data()+00, m_screen_tiles.data() + n*16, 16);
-            memcpy(tile.data()+16, m_screen_tiles_blink.data() + n*16, 16);
-        } else
+            if (y*8 < irq0)
+                slot = 0;
+            else
+                slot = 1;
+        } else if (irq0 != 0 && irq1 != 0)
         {
-            tile.resize(16);
-            memcpy(tile.data(), m_screen_tiles.data() + n*16, 16);
+            if (y*8 < irq0)
+                slot = 0;
+            else if (y*8 < irq1)
+                slot = 1;
+            else
+                slot = 2;
         }
-        auto itt = tile_map.find(tile);
-        if (itt == tile_map.end())
+
+        for (size_t x = 0; x < 32; ++x)
         {
-            int index = (int)tile_vector.size() / 16;
-            tile_map.insert(std::make_pair(tile, index));
+            size_t n = x + y*32;
+            std::vector<uint8_t> tile;
             if (ui->checkBox_two_frames_blinking->isChecked())
             {
-                tile_vector.insert(tile_vector.end(), tile.begin(), tile.begin()+16);
-                tile_vector_blink.insert(tile_vector_blink.end(), tile.begin()+16, tile.begin()+32);
+                tile.resize(32);
+                memcpy(tile.data()+00, m_screen_tiles.data() + n*16, 16);
+                memcpy(tile.data()+16, m_screen_tiles_blink.data() + n*16, 16);
             } else
-                tile_vector.insert(tile_vector.end(), tile.begin(), tile.end());
-            nametable[n] = index;
-        } else
-            nametable[n] = itt->second;
-        size_t y = n / 32;
-        size_t x = n % 32;
-        uint8_t attr = m_screen_attribute[(y/2)*16 + (x/2)];
-        if ((x/2) % 2 == 1)
-            attr <<= 2;
-        if ((y/2) % 2 == 1)
-            attr <<= 4;
-        nametable[960 + (y/4)*8 + x/4] |= attr;
+            {
+                tile.resize(16);
+                memcpy(tile.data(), m_screen_tiles.data() + n*16, 16);
+            }
+            auto itt = tile_map[slot].find(tile);
+            if (itt == tile_map[slot].end())
+            {
+                int index = (int)tile_vector[slot].size() / 16;
+                tile_map[slot].insert(std::make_pair(tile, index));
+                if (ui->checkBox_two_frames_blinking->isChecked())
+                {
+                    tile_vector[slot].insert(tile_vector[slot].end(), tile.begin(), tile.begin()+16);
+                    tile_vector_blink[slot].insert(tile_vector_blink[slot].end(), tile.begin()+16, tile.begin()+32);
+                } else
+                    tile_vector[slot].insert(tile_vector[slot].end(), tile.begin(), tile.end());
+                nametable[n] = index;
+            } else
+                nametable[n] = itt->second;
+
+            uint8_t attr = m_screen_attribute[(y/2)*16 + (x/2)];
+            if ((x/2) % 2 == 1)
+                attr <<= 2;
+            if ((y/2) % 2 == 1)
+                attr <<= 4;
+            nametable[960 + (y/4)*8 + x/4] |= attr;
+        }
     }
 
 
@@ -355,9 +378,13 @@ void MainWindow::on_pushButton_export_clicked()
 
     if (align_size != 0)
     {
-        tile_vector.resize((tile_vector.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
-        if (ui->checkBox_two_frames_blinking->isChecked())
-            tile_vector_blink.resize((tile_vector_blink.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+        for (size_t i = 0; i < 4; ++i)
+        {
+            if (tile_vector[i].size() != 0)
+                tile_vector[i].resize((tile_vector[i].size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+            if (ui->checkBox_two_frames_blinking->isChecked() && tile_vector_blink[i].size() != 0)
+                tile_vector_blink[i].resize((tile_vector_blink[i].size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+        }
 
         if (!oam_chr.empty())
         {
@@ -370,9 +397,14 @@ void MainWindow::on_pushButton_export_clicked()
     {
         QFile file(chr_file_name);
         file.open(QFile::WriteOnly);
-        file.write((const char*)tile_vector.data(), tile_vector.size());
-        if (ui->checkBox_two_frames_blinking->isChecked())
-            file.write((const char*)tile_vector_blink.data(), tile_vector_blink.size());
+        for (size_t i = 0; i < 4; ++i)
+        {
+            if (tile_vector[i].size() != 0)
+                file.write((const char*)tile_vector[i].data(), tile_vector[i].size());
+            if (ui->checkBox_two_frames_blinking->isChecked() && tile_vector_blink[i].size() != 0)
+                file.write((const char*)tile_vector_blink[i].data(), tile_vector_blink[i].size());
+        }
+
         if (!oam_chr.empty())
         {
             file.write((const char*)oam_chr.data(), oam_chr.size());

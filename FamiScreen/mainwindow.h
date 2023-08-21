@@ -65,8 +65,9 @@ private slots:
     void on_radioButton_oam_draw_original_clicked();
     void on_radioButton_oam_draw_result_clicked();
     void on_radioButton_oam_draw_background_clicked();
-
     void on_checkBox_two_frames_blinking_clicked();
+    void on_edit_irq_0_editingFinished();
+    void on_edit_irq_1_editingFinished();
 
 private:
     Ui::MainWindow *ui;
