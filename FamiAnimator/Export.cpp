@@ -81,12 +81,12 @@ void MainWindow::Export_SpriteConvert()
                         {
                             uint8_t c0 = found / 4;
                             uint8_t c1 = found % 4;
-                            /*if ((m_slice_vector[index].oam[n].y + y) % 2 != 0)
+                            if ((m_slice_vector[index].oam[n].y + y) % 2 != 0)
                             {
                                 uint8_t tmp = c0;
                                 c0 = c1;
                                 c1 = tmp;
-                            }*/
+                            }
                             if (c0 == 1)
                                 *bit0 |= mask;
                             else if (c0 == 2)
