@@ -16,9 +16,11 @@ SOURCES += \
     dialogpickpalette.cpp \
     main.cpp \
     mainwindow.cpp \
+    wnd_block.cpp \
     wnd_chr.cpp \
     wnd_general.cpp \
-    wnd_palette.cpp
+    wnd_palette.cpp \
+    wnd_screen.cpp
 
 HEADERS += \
     Palette.h \

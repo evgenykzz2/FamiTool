@@ -16,6 +16,15 @@ void MainWindow::GeneralWnd_Init()
     ui->comboBox_palette_mode->blockSignals(false);
 }
 
+void MainWindow::on_lineEdit_name_editingFinished()
+{
+    State state = m_state.back();
+    if (state.m_name == ui->lineEdit_name->text())
+        return;
+    state.m_name = ui->lineEdit_name->text();
+    StatePush(state);
+}
+
 void MainWindow::on_edit_width_in_screens_editingFinished()
 {
     int width = ui->edit_width_in_screens->text().toInt();
@@ -52,6 +61,7 @@ void MainWindow::GeneralWnd_FullRedraw()
     State state = m_state.back();
     ui->edit_width_in_screens->setText(QString("%1").arg(state.m_width_screens));
     ui->edit_height_in_screens->setText(QString("%1").arg(state.m_height_screens));
+    ui->lineEdit_name->setText(state.m_name);
     GeneralWnd_RedrawPalette();
 }
 

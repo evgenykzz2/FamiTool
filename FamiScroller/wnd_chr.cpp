@@ -3,6 +3,12 @@
 #include <QPainter>
 #include "QMouseEvent"
 #include <iostream>
+#include <QFileDialog>
+#include <QMessageBox>
+
+#define CHR_WIDTH_TILES 16
+#define CHR_HEIGHT_TILES 8
+#define CHR_ZOOM 4
 
 void MainWindow::ChrWnd_Init()
 {
@@ -27,7 +33,28 @@ void MainWindow::ChrWnd_FullRedraw()
 
 void MainWindow::ChrWnd_RedrawImage()
 {
+    State state = m_state.back();
+    int id = ui->comboBox_chr_set->itemData(state.m_chr_map_index).toInt();
+    auto itt = state.m_chr_map.find(id);
+    if (itt == state.m_chr_map.end())
+    {
+        ui->label_chr_set_view->setVisible(false);
+        return;
+    }
 
+    if (!itt->second.chr_data)
+    {
+        ui->label_chr_set_view->setVisible(false);
+        return;
+    }
+
+    uint32_t color[4] = {0xFF000000, 0xFF606060, 0xFFA0A0A0, 0xFFFFFFFF};
+    QImage image = ChrRender(itt->second.chr_data->data(), CHR_WIDTH_TILES, CHR_HEIGHT_TILES, CHR_ZOOM, color);
+
+    ui->label_chr_set_view->setMinimumSize(image.size());
+    ui->label_chr_set_view->setMaximumSize(image.size());
+    ui->label_chr_set_view->setPixmap(QPixmap::fromImage(image));
+    ui->label_chr_set_view->setVisible(true);
 }
 
 void MainWindow::ChrWnd_RedrawFileName()
@@ -121,6 +148,41 @@ void MainWindow::on_btn_chr_set_remove_clicked()
 
 void MainWindow::on_btn_chr_set_browse_clicked()
 {
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select chr tileset"), QDir::currentPath(), tr("*.chr *.bin"));
+    if (file_name.isEmpty())
+        return;
+    QFile file(file_name);
 
+    QByteArray byte_array;
+    if (file.open(QFile::ReadOnly))
+    {
+        byte_array = file.readAll();
+        file.close();
+    } else
+    {
+        QMessageBox::critical(0, "Error", "Can't read file: " + file.errorString());
+        return;
+    }
+
+    if (byte_array.size() != 2*1024)
+    {
+        QMessageBox::critical(0, "Error", "Invalid file size, it must be 2048 bytes");
+        return;
+    }
+
+
+    State state = m_state.back();
+    int id = ui->comboBox_chr_set->itemData(state.m_chr_map_index).toInt();
+    auto itt = state.m_chr_map.find(id);
+    if (itt == state.m_chr_map.end())
+        return;
+
+    itt->second.file_name = file_name;
+    itt->second.chr_data = std::make_shared<std::vector<uint8_t>>(2048);
+    memcpy(itt->second.chr_data->data(), byte_array.data(), itt->second.chr_data->size());
+
+    StatePush(state);
+    ChrWnd_RedrawImage();
+    ui->lineEdit_chr_set_file_name->setText(itt->second.file_name);
 }
 

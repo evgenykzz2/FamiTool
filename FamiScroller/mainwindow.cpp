@@ -11,6 +11,7 @@
 #include "picojson.h"
 #include <set>
 #include <memory>
+#include <iomanip>
 #include <Windows.h>
 #include <QShortcut>
 
@@ -31,11 +32,17 @@ MainWindow::MainWindow(QWidget *parent)
     state.m_palette = Palette_2C02;
     state.m_palette_map_index = 0;
     state.m_chr_map_index = 0;
+    state.m_block_map_index = 0;
+    state.m_block_chr1 = 0;
+    state.m_block_chr0 = 0;
+    state.m_block_tile_slot = 0;
     m_state.push_back(state);
 
     GeneralWnd_Init();
     PaletteWnd_Init();
     ChrWnd_Init();
+    BlockWnd_Init();
+    ScreenWnd_Init();
 
     //-------------------------------------------------------------------------------
     //m_attribute_tab_zoom = 1;
@@ -103,6 +110,10 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
 {
     if (ui->tabWidget->currentWidget() == ui->tab_palette)
         PaletteWnd_EventFilter(object, event);
+    if (ui->tabWidget->currentWidget() == ui->tab_Block)
+        BlockWnd_EventFilter(object, event);
+    if (ui->tabWidget->currentWidget() == ui->tab_screen)
+        ScreenWnd_EventFilter(object, event);
 
     if (event->type() == QEvent::MouseButtonPress)
     {
@@ -180,7 +191,7 @@ void MainWindow::SaveProject(const QString &file_name)
     json.set<picojson::object>(picojson::object());
     json.get<picojson::object>()["palette_mode"] = picojson::value( (double)state.m_palette );
 
-    //json.get<picojson::object>()["name"] = picojson::value( ui->lineEdit_name->text().toUtf8().toBase64().data() );
+    json.get<picojson::object>()["name"] = picojson::value( state.m_name.toUtf8().toBase64().data() );
     //json.get<picojson::object>()["compression"] = picojson::value( (double)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt() );
     //json.get<picojson::object>()["chr_align"] = picojson::value( (double)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt() );
 
@@ -221,33 +232,50 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["chr_map"] = picojson::value(items);
     }
 
-    //json.get<picojson::object>()["sprite_mode"] = picojson::value( (double)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt() );
-    //json.get<picojson::object>()["sprite_set"] = picojson::value( m_spriteset_file_name.toUtf8().toBase64().data() );
-    //json.get<picojson::object>()["indexed_apply"] = picojson::value( (bool)ui->checkBox_make_indexed->isChecked() );
-    //json.get<picojson::object>()["indexed_method"] = picojson::value( ui->comboBox_palette_method->currentText().toStdString() );
-    //json.get<picojson::object>()["indexed_diether"] = picojson::value( (bool)ui->checkBox_palette_deither->isChecked() );
-    //json.get<picojson::object>()["indexed_colors"] = picojson::value( (double)ui->lineEdit_palette_color_count->text().toInt() );
-    //json.get<picojson::object>()["two_frames_blinking"] = picojson::value( (bool)ui->checkBox_two_frames_blinking->isChecked() );
+    {
+        json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
+        json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
+        json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
+        json.get<picojson::object>()["block_tile_slot"] = picojson::value( (double)state.m_block_tile_slot );
+        picojson::array items = picojson::array();
+        for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+        {
+                picojson::object item_obj;
+                item_obj["id"] = picojson::value( (double)(itt->first) );
+                item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                item_obj["t0"] = picojson::value( (double)(itt->second.tile_id[0]) );
+                item_obj["t1"] = picojson::value( (double)(itt->second.tile_id[1]) );
+                item_obj["t2"] = picojson::value( (double)(itt->second.tile_id[2]) );
+                item_obj["t3"] = picojson::value( (double)(itt->second.tile_id[3]) );
+                item_obj["pal"] = picojson::value( (double)(itt->second.palette) );
+                items.push_back(picojson::value(item_obj));
+        }
+        json.get<picojson::object>()["block_map"] = picojson::value(items);
+    }
 
-
-    //picojson::array items = picojson::array();
-    //for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
-    //{
-    //        picojson::object item_obj;
-    //        item_obj["r"] = picojson::value( (double)(itt->first & 0xFF) );
-    //        item_obj["g"] = picojson::value( (double)((itt->first >> 8) & 0xFF) );
-    //        item_obj["b"] = picojson::value( (double)((itt->first >> 16) & 0xFF) );
-    //        //item_obj["a"] = picojson::value( (double)((itt->first >> 24) & 0xFF) );
-    //        item_obj["i"] = picojson::value( (double)itt->second );
-    //        items.push_back(picojson::value(item_obj));
-    //}
-    //json.get<picojson::object>()["color_map"] = picojson::value(items);
-
-
-    //int irq0 = ui->edit_irq_0->text().toInt();
-    //if (irq0 != 0)
-    //    json.get<picojson::object>()["irq0"] = picojson::value( (double)irq0 );
-
+    {
+        picojson::array items = picojson::array();
+        for (auto itt = state.m_world.begin(); itt != state.m_world.end(); ++itt)
+        {
+                picojson::object item_obj;
+                item_obj["x"] = picojson::value( (double)(itt->first.first) );
+                item_obj["y"] = picojson::value( (double)(itt->first.second) );
+                item_obj["chr0"] = picojson::value( (double)(itt->second.chr0_id) );
+                item_obj["chr1"] = picojson::value( (double)(itt->second.chr1_id) );
+                item_obj["flags"] = picojson::value( (double)(itt->second.flags) );
+                item_obj["palette_id"] = picojson::value( (double)(itt->second.palette_id) );
+                for (int y = 0; y < 16; ++y)
+                {
+                    std::stringstream stream;
+                    for (int x = 0; x < 16; ++x)
+                        stream << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << (((uint32_t)itt->second.block[y*16+x])&255);
+                    QString name = QString("l%1").arg(y, 2, 10, QChar('0'));
+                    item_obj[name.toStdString()] = picojson::value(stream.str());
+                }
+                items.push_back(picojson::value(item_obj));
+        }
+        json.get<picojson::object>()["world_map"] = picojson::value(items);
+    }
 
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
@@ -260,6 +288,80 @@ void MainWindow::SaveProject(const QString &file_name)
     file.write(json_str.toLocal8Bit());
     file.close();
 }
+
+#if 0
+static const uint8_t s_block_chr[128*4] =
+    {
+        0x24, 0x24, 0x24, 0x24,   0x27, 0x27, 0x27, 0x27,   0x24, 0x24, 0x24, 0x35,   0x36, 0x25, 0x37, 0x25,   //00
+        0x24, 0x38, 0x24, 0x24,   0x24, 0x30, 0x30, 0x26,   0x26, 0x26, 0x34, 0x26,   0x24, 0x31, 0x24, 0x32,   //04
+        0x33, 0x26, 0x24, 0x33,   0x34, 0x26, 0x26, 0x26,   0x26, 0x26, 0x26, 0x26,   0x24, 0xC0, 0x24, 0xC0,   //08
+        0x24, 0x7F, 0x7F, 0x24,   0xB8, 0xBA, 0xB9, 0xBB,   0xB8, 0xBC, 0xB9, 0xBD,   0xBA, 0xBC, 0xBB, 0xBD,   //0C
+        0x60, 0x64, 0x61, 0x65,   0x62, 0x66, 0x63, 0x67,   0x60, 0x64, 0x61, 0x65,   0x62, 0x66, 0x63, 0x67,   //10
+        0x68, 0x68, 0x69, 0x69,   0x26, 0x26, 0x6A, 0x6A,   0x4B, 0x4C, 0x4D, 0x4E,   0x4D, 0x4F, 0x4D, 0x4F,   //14
+        0x4D, 0x4E, 0x50, 0x51,   0x6B, 0x70, 0x2C, 0x2D,   0x6C, 0x71, 0x6D, 0x72,   0x6E, 0x73, 0x6F, 0x74,   //18
+        0x86, 0x8A, 0x87, 0x8B,   0x88, 0x8C, 0x88, 0x8C,   0x89, 0x8D, 0x69, 0x69,   0x8E, 0x91, 0x8F, 0x92,   //1C
+        0x26, 0x93, 0x26, 0x93,   0x90, 0x94, 0x69, 0x69,   0xA4, 0xE9, 0xEA, 0xEB,   0x24, 0x24, 0x24, 0x24,   //20
+        0x24, 0x2F, 0x24, 0x3D,   0xA2, 0xA2, 0xA3, 0xA3,   0x24, 0x24, 0x24, 0x24,   0xA2, 0xA2, 0xA3, 0xA3,   //24
+        0x99, 0x24, 0x99, 0x24,   0x24, 0xA2, 0x3E, 0x3F,   0x5B, 0x5C, 0x24, 0xA3,   0x24, 0x24, 0x24, 0x24,   //28
+        0x9D, 0x47, 0x9E, 0x47,   0x47, 0x47, 0x27, 0x27,   0x47, 0x47, 0x47, 0x47,   0x27, 0x27, 0x47, 0x47,   //2C
+        0xA9, 0x47, 0xAA, 0x47,   0x9B, 0x27, 0x9C, 0x27,   0x27, 0x27, 0x27, 0x27,   0x52, 0x52, 0x52, 0x52,   //30
+        0x80, 0xA0, 0x81, 0xA1,   0xBE, 0xBE, 0xBF, 0xBF,   0x75, 0xBA, 0x76, 0xBB,   0xBA, 0xBA, 0xBB, 0xBB,   //34
+        0x45, 0x47, 0x45, 0x47,   0x47, 0x47, 0x47, 0x47,   0x45, 0x47, 0x45, 0x47,   0xB4, 0xB6, 0xB5, 0xB7,   //38
+        0x45, 0x47, 0x45, 0x47,   0x45, 0x47, 0x45, 0x47,   0x45, 0x47, 0x45, 0x47,   0x45, 0x47, 0x45, 0x47,   //3C
+        0x45, 0x47, 0x45, 0x47,   0x47, 0x47, 0x47, 0x47,   0x47, 0x47, 0x47, 0x47,   0x47, 0x47, 0x47, 0x47,   //40
+        0x47, 0x47, 0x47, 0x47,   0x47, 0x47, 0x47, 0x47,   0x24, 0x24, 0x24, 0x24,   0x24, 0x24, 0x24, 0x24,   //44
+        0xAB, 0xAC, 0xAD, 0xAE,   0x5D, 0x5E, 0x5D, 0x5E,   0xC1, 0x24, 0xC1, 0x24,   0xC6, 0xC8, 0xC7, 0xC9,   //48
+        0xCA, 0xCC, 0xCB, 0xCD,   0x2A, 0x2A, 0x40, 0x40,   0x24, 0x24, 0x24, 0x24,   0x24, 0x47, 0x24, 0x47,   //4C
+        0x82, 0x83, 0x84, 0x85,   0x24, 0x47, 0x24, 0x47,   0x86, 0x8A, 0x87, 0x8B,   0x8E, 0x91, 0x8F, 0x92,   //50
+        0x24, 0x2F, 0x24, 0x3D,   0x24, 0x24, 0x24, 0x35,   0x36, 0x25, 0x37, 0x25,   0x24, 0x38, 0x24, 0x24,   //54
+        0x24, 0x24, 0x39, 0x24,   0x3A, 0x24, 0x3B, 0x24,   0x3C, 0x24, 0x24, 0x24,   0x41, 0x26, 0x41, 0x26,   //58
+        0x26, 0x26, 0x26, 0x26,   0xB0, 0xB1, 0xB2, 0xB3,   0x77, 0x79, 0x77, 0x79,   0x53, 0x55, 0x54, 0x56,   //5C
+        0x53, 0x55, 0x54, 0x56,   0xA5, 0xA7, 0xA6, 0xA8,   0xC2, 0xC4, 0xC3, 0xC5,   0x57, 0x59, 0x58, 0x5A,   //60
+        0x7B, 0x7D, 0x7C, 0x7E,   0x3F, 0x00, 0x20, 0x0F,   0x15, 0x12, 0x25, 0x0F,   0x3A, 0x1A, 0x0F, 0x0F,   //64
+        0x30, 0x12, 0x0F, 0x0F,   0x27, 0x12, 0x0F, 0x22,   0x16, 0x27, 0x18, 0x0F,   0x10, 0x30, 0x27, 0x0F,   //68
+        0x16, 0x30, 0x27, 0x0F,   0x0F, 0x30, 0x10, 0x00,   0x3F, 0x00, 0x20, 0x0F,   0x29, 0x1A, 0x0F, 0x0F,   //6C
+        0x36, 0x17, 0x0F, 0x0F,   0x30, 0x21, 0x0F, 0x0F,   0x27, 0x17, 0x0F, 0x0F,   0x16, 0x27, 0x18, 0x0F,   //70
+        0x1A, 0x30, 0x27, 0x0F,   0x16, 0x30, 0x27, 0x0F,   0x0F, 0x36, 0x17, 0x00,   0x3F, 0x00, 0x20, 0x0F,   //74
+        0x29, 0x1A, 0x09, 0x0F,   0x3C, 0x1C, 0x0F, 0x0F,   0x30, 0x21, 0x1C, 0x0F,   0x27, 0x17, 0x1C, 0x0F,   //78
+        0x16, 0x27, 0x18, 0x0F,   0x1C, 0x36, 0x17, 0x0F,   0x16, 0x30, 0x27, 0x0F,   0x0C, 0x3C, 0x1C, 0x00    //7C
+    };
+
+static const uint8_t s_block_pal[128] =
+    {
+        0, 0, 0, 0, //00
+        0, 0, 0, 0, //04
+        0, 0, 0, 0, //08
+        0, 0, 0, 0, //0C
+        0, 0, 0, 0, //10
+        0, 0, 0, 0, //14
+        0, 0, 0, 0, //18
+        0, 0, 0, 0, //1C
+        0, 0, 0, 0, //20
+        0, 0, 0, 0, //24
+        0, 0, 0, 0, //28
+        1, 1, 1, 1, //2C
+        1, 1, 0, 1, //30
+        0, 0, 0, 0, //34
+        1, 1, 1, 1, //38
+        1, 1, 1, 1, //3C
+        1, 1, 1, 1, //40
+        1, 1, 0, 0, //44
+        1, 0, 1, 1, //48
+        1, 1, 0, 1, //4C
+        2, 1, 0, 0, //50
+        0, 2, 2, 2, //54
+        2, 2, 2, 0, //58
+        0, 0, 0, 3, //5C
+        3, 3, 3, 1, //60
+        0, 0, 0, 0, //64
+        0, 0, 0, 0, //68
+        0, 0, 0, 0, //6C
+        0, 0, 0, 0, //70
+        0, 0, 0, 0, //74
+        0, 0, 0, 0, //78
+        0, 0, 0, 0, //7C
+    };
+#endif
 
 void MainWindow::LoadProject(const QString &file_name)
 {
@@ -294,7 +396,8 @@ void MainWindow::LoadProject(const QString &file_name)
     else
         state.m_height_screens = 1;
 
-
+    if (json.contains("name"))
+        state.m_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["name"].get<std::string>().c_str()));
 
     if (json.contains("palette_map_index"))
         state.m_palette_map_index = json.get<picojson::object>()["palette_map_index"].get<double>();
@@ -330,44 +433,77 @@ void MainWindow::LoadProject(const QString &file_name)
             int id = (int)(itt->get<picojson::object>()["id"].get<double>());
             chr_set.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
             chr_set.file_name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["file_name"].get<std::string>() .c_str()));
+
+            if (!chr_set.file_name.isEmpty())
+            {
+                chr_set.chr_data = std::make_shared<std::vector<uint8_t>>(2048, 0x00);
+
+                QFile file(chr_set.file_name);
+                QByteArray byte_array;
+                if (file.open(QFile::ReadOnly))
+                {
+                    byte_array = file.readAll();
+                    file.close();
+
+                    int size = chr_set.chr_data->size();
+                    if (byte_array.size() < size)
+                        size = byte_array.size();
+                    memcpy(chr_set.chr_data->data(), byte_array.data(), size);
+                }
+            }
             state.m_chr_map.insert(std::make_pair(id, chr_set));
         }
     }
 
+    if (json.contains("block_chr0"))
+        state.m_block_chr0 = json.get<picojson::object>()["block_chr0"].get<double>();
+    else
+        state.m_block_chr0 = 0;
 
-    //QString name;
-    //if (json.contains("name"))
-        //name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["name"].get<std::string>().c_str()));
-    //ui->lineEdit_name->setText(name);
+    if (json.contains("block_chr1"))
+        state.m_block_chr1 = json.get<picojson::object>()["block_chr1"].get<double>();
+    else
+        state.m_block_chr1 = 0;
 
-    //m_palette_cvt_rule.clear();
-    //if (json.contains("color_map"))
-    //{
-    //    picojson::array items = json.get<picojson::object>()["color_map"].get<picojson::array>();
-    //    for (auto itt = items.begin(); itt != items.end(); ++itt)
-    //    {
-    //        uint32_t r = (uint32_t)(itt->get<picojson::object>()["r"].get<double>());
-    //        uint32_t g = (uint32_t)(itt->get<picojson::object>()["g"].get<double>());
-    //        uint32_t b = (uint32_t)(itt->get<picojson::object>()["b"].get<double>());
-    //        uint32_t a = 0x00;//(uint32_t)(itt->get<picojson::object>()["a"].get<double>());
-    //        int i = (int)(itt->get<picojson::object>()["i"].get<double>());
-    //        m_palette_cvt_rule.insert(std::make_pair(r | (g<<8) | (b<<16) | (a<<24), i));
-    //    }
-    //}
+    if (json.contains("block_tile_slot"))
+        state.m_block_tile_slot = json.get<picojson::object>()["block_tile_slot"].get<double>();
+    else
+        state.m_block_tile_slot = 0;
 
-    //if (json.contains("indexed_apply"))
-    //    ui->checkBox_make_indexed->setChecked(json.get<picojson::object>()["indexed_apply"].get<bool>());
-    //if (json.contains("indexed_diether"))
-    //    ui->checkBox_palette_deither->setChecked(json.get<picojson::object>()["indexed_diether"].get<bool>());
-    //if (json.contains("indexed_colors"))
-    //    ui->lineEdit_palette_color_count->setText(QString("%1").arg((int)json.get<picojson::object>()["indexed_colors"].get<double>()));
-    //if (json.contains("two_frames_blinking"))
-        //ui->checkBox_two_frames_blinking->setChecked(json.get<picojson::object>()["two_frames_blinking"].get<bool>());
+    if (json.contains("block_map_index"))
+        state.m_block_map_index = json.get<picojson::object>()["block_map_index"].get<double>();
+    else
+        state.m_block_map_index = 0;
+    if (json.contains("block_map"))
+    {
+        picojson::array items = json.get<picojson::object>()["block_map"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
+        {
+            Block block;
+            int id = (int)(itt->get<picojson::object>()["id"].get<double>());
+            block.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            block.tile_id[0] = (int)itt->get<picojson::object>()["t0"].get<double>();
+            block.tile_id[1] = (int)itt->get<picojson::object>()["t1"].get<double>();
+            block.tile_id[2] = (int)itt->get<picojson::object>()["t2"].get<double>();
+            block.tile_id[3] = (int)itt->get<picojson::object>()["t3"].get<double>();
+            block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
+            state.m_block_map.insert(std::make_pair(id, block));
+        }
+    }
 
-    //if (json.contains("irq0"))
-    //    ui->edit_irq_0->setText( QString("%1").arg( (int)(json.get<picojson::object>()["irq0"].get<double>()) ));
-    //else
-    //    ui->edit_irq_0->setText("0");
+#if 0
+    for (int i = 0; i < 102; ++i)
+    {
+        Block block;
+        block.name = QString("block-%1").arg(i);
+        block.palette = s_block_pal[i];
+        block.tile_id[0] = s_block_chr[i*4+0];
+        block.tile_id[1] = s_block_chr[i*4+2];
+        block.tile_id[2] = s_block_chr[i*4+1];
+        block.tile_id[3] = s_block_chr[i*4+3];
+        state.m_block_map.insert(std::make_pair(i, block));
+    }
+#endif
 
     m_state.clear();
     m_state.push_back(state);
@@ -383,8 +519,11 @@ void MainWindow::on_tabWidget_currentChanged(int)
         PaletteWnd_FullRedraw();
     if (ui->tabWidget->currentWidget() == ui->tab_chr)
         ChrWnd_FullRedraw();
+    if (ui->tabWidget->currentWidget() == ui->tab_Block)
+        BlockWnd_FullRedraw();
+    if (ui->tabWidget->currentWidget() == ui->tab_screen)
+        ScreenWnd_FullRedraw();
 }
-
 
 
 

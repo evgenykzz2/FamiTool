@@ -1,5 +1,6 @@
 #pragma once
 #include <QString>
+#include <QImage>
 #include <vector>
 #include <map>
 #include <memory.h>
@@ -44,6 +45,13 @@ struct SliceArea
     //std::map<std::vector<uint8_t>, int> chr_export_map;
 };
 
+struct Block
+{
+    QString name;
+    uint8_t tile_id[4];
+    uint8_t palette;
+};
+
 
 struct ChrSet
 {
@@ -51,3 +59,6 @@ struct ChrSet
     QString file_name;
     std::shared_ptr<std::vector<uint8_t>> chr_data;
 };
+
+
+QImage ChrRender(const void* chr, int tile_width, int tile_height, int tile_zoom, const uint32_t *color);

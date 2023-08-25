@@ -16,6 +16,7 @@ QT_END_NAMESPACE
 
 struct State
 {
+    QString m_name;
     int m_width_screens;
     int m_height_screens;
     EPalette m_palette;
@@ -25,6 +26,12 @@ struct State
 
     std::map<int, ChrSet> m_chr_map;
     int m_chr_map_index; //combo box item
+
+    int m_block_chr0;
+    int m_block_chr1;
+    std::map<int, Block> m_block_map;
+    int m_block_map_index; //combo box item
+    int m_block_tile_slot;
 
     std::map<std::pair<int, int>, Screen> m_world;
 };
@@ -50,10 +57,22 @@ public:
     void PaletteWnd_RedrawPalette();
     void PaletteWnd_EventFilter(QObject* object, QEvent* event);
 
+    void BlockWnd_Init();
+    void BlockWnd_FullRedraw();
+    void BlockWnd_EventFilter(QObject* object, QEvent* event);
+    void BlockWnd_RedrawBlock();
+    void BlockWnd_RedrawChr0();
+    void BlockWnd_RedrawChr1();
+
     void ChrWnd_Init();
     void ChrWnd_FullRedraw();
     void ChrWnd_RedrawImage();
     void ChrWnd_RedrawFileName();
+
+    void ScreenWnd_Init();
+    void ScreenWnd_FullRedraw();
+    void ScreenWnd_RedrawScreen();
+    void ScreenWnd_EventFilter(QObject* object, QEvent* event);
 
     void Export_SpriteConvert();
     void Export_Buffer(std::stringstream &stream, const void* data, size_t size);
@@ -79,10 +98,16 @@ private slots:
     void on_btn_chr_set_add_clicked();
     void on_btn_chr_set_remove_clicked();
     void on_btn_chr_set_browse_clicked();
-
     void on_lineEdit_chr_set_editingFinished();
-
     void on_lineEdit_palette_set_editingFinished();
+    void on_lineEdit_name_editingFinished();
+    void on_comboBox_block_set_currentIndexChanged(int index);
+    void on_lineEdit_block_set_editingFinished();
+    void on_btn_block_set_add_clicked();
+    void on_btn_block_set_remove_clicked();
+    void on_comboBox_block_set_palette_currentIndexChanged(int index);
+    void on_comboBox_block_chr0_currentIndexChanged(int index);
+    void on_comboBox_block_chr1_currentIndexChanged(int index);
 
 private:
     Ui::MainWindow *ui;
