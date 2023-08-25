@@ -505,6 +505,41 @@ void MainWindow::LoadProject(const QString &file_name)
     }
 #endif
 
+    if (json.contains("world_map"))
+    {
+        picojson::array items = json.get<picojson::object>()["world_map"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
+        {
+            Screen screen;
+            int x = (int)(itt->get<picojson::object>()["x"].get<double>());
+            int y = (int)(itt->get<picojson::object>()["y"].get<double>());
+            screen.chr0_id = (int)(itt->get<picojson::object>()["chr0"].get<double>());
+            screen.chr1_id = (int)(itt->get<picojson::object>()["chr1"].get<double>());
+            screen.flags = (int)(itt->get<picojson::object>()["flags"].get<double>());
+            screen.palette_id = (int)(itt->get<picojson::object>()["palette_id"].get<double>());
+            for (int y = 0; y < 16; ++y)
+            {
+                QString name = QString("l%1").arg(y, 2, 10, QChar('0'));
+                std::string line = itt->get<picojson::object>()[name.toStdString()].get<std::string>();
+                for (int x = 0; x < 16; ++x)
+                {
+                    uint8_t v = 0;
+                    if (line[x*2+0] >= '0' && line[x*2+0] <= '9')
+                        v = (line[x*2+0]-'0') << 4;
+                    else if (line[x*2+0] >= 'A' && line[x*2+0] <= 'F')
+                        v = ((line[x*2+0]-'A') + 0xA) << 4;
+
+                    if (line[x*2+1] >= '0' && line[x*2+1] <= '9')
+                        v |= (line[x*2+1]-'0');
+                    else if (line[x*2+1] >= 'A' && line[x*2+1] <= 'F')
+                        v |= ((line[x*2+1]-'A') + 0xA);
+                    screen.block[x+y*16] = v;
+                }
+            }
+            state.m_world.insert(std::make_pair(std::make_pair(x, y), screen));
+        }
+    }
+
     m_state.clear();
     m_state.push_back(state);
     on_tabWidget_currentChanged(ui->tabWidget->currentIndex());
@@ -524,6 +559,11 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_screen)
         ScreenWnd_FullRedraw();
 }
+
+
+
+
+
 
 
 

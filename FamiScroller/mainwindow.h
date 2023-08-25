@@ -108,6 +108,9 @@ private slots:
     void on_comboBox_block_set_palette_currentIndexChanged(int index);
     void on_comboBox_block_chr0_currentIndexChanged(int index);
     void on_comboBox_block_chr1_currentIndexChanged(int index);
+    void on_checkBox_screen_draw_grid_clicked();
+    void on_scroll_screen_v_valueChanged(int value);
+    void on_scroll_screen_h_valueChanged(int value);
 
 private:
     Ui::MainWindow *ui;

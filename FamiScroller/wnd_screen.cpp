@@ -6,6 +6,7 @@
 #include <iostream>
 
 static std::map<int, QImage> s_block_image_map;
+static double m_zoom = 1.0;
 
 void MainWindow::ScreenWnd_Init()
 {
@@ -17,14 +18,27 @@ void MainWindow::ScreenWnd_Init()
 
 void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
 {
+    if ( (object == ui->label_screen_render || object == ui->widget_screen_left) && event->type() == QEvent::Wheel)
+    {
+        QWheelEvent* wheel = (QWheelEvent*)event;
+        m_zoom += (double)(wheel->angleDelta().y()) / 120.0 * 0.25;
+        if (m_zoom < 1.0)
+            m_zoom = 1.0;
+        if (m_zoom > 4.0)
+            m_zoom = 4.0;
+        ScreenWnd_RedrawScreen();
+        //return QWidget::eventFilter( object, event );
+    }
+
+
     if (object == ui->label_screen_render &&
             (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove))
     {
         QMouseEvent* mouse_event = (QMouseEvent*)event;
         if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
         {
-            int x = mouse_event->x()/1 + ui->slider_screen_h->value();
-            int y = mouse_event->y()/1 + ui->slider_screen_v->value();
+            int x = mouse_event->x()/m_zoom + ui->scroll_screen_h->value();
+            int y = mouse_event->y()/m_zoom + ui->scroll_screen_v->value();
 
             State state = m_state.back();
 
@@ -52,11 +66,15 @@ void MainWindow::ScreenWnd_FullRedraw()
     s_block_image_map.clear();
     State state = m_state.back();
 
-    ui->slider_screen_h->setMinimum(0);
-    ui->slider_screen_h->setMaximum(state.m_width_screens*256 - 256);
+    ui->scroll_screen_h->blockSignals(true);
+    ui->scroll_screen_h->setMinimum(0);
+    ui->scroll_screen_h->setMaximum(state.m_width_screens*256 - 256);
+    ui->scroll_screen_h->blockSignals(false);
 
-    ui->slider_screen_v->setMinimum(0);
-    ui->slider_screen_v->setMaximum(state.m_height_screens*256 - 240);
+    ui->scroll_screen_v->blockSignals(true);
+    ui->scroll_screen_v->setMinimum(0);
+    ui->scroll_screen_v->setMaximum(state.m_height_screens*256 - 240);
+    ui->scroll_screen_v->blockSignals(false);
 
     //Build images
     {
@@ -132,6 +150,20 @@ void MainWindow::ScreenWnd_FullRedraw()
     ScreenWnd_RedrawScreen();
 }
 
+void MainWindow::on_checkBox_screen_draw_grid_clicked()
+{
+    ScreenWnd_RedrawScreen();
+}
+
+void MainWindow::on_scroll_screen_v_valueChanged(int value)
+{
+    ScreenWnd_RedrawScreen();
+}
+
+void MainWindow::on_scroll_screen_h_valueChanged(int value)
+{
+   ScreenWnd_RedrawScreen();
+}
 
 void MainWindow::ScreenWnd_RedrawScreen()
 {
@@ -182,7 +214,7 @@ void MainWindow::ScreenWnd_RedrawScreen()
 
     for (int y = 0; y < 240; ++y)
     {
-        int world_y = y + ui->slider_screen_v->value();
+        int world_y = y + ui->scroll_screen_v->value();
         int screen_y = world_y / 256;
         if (screen_y < 0 || screen_y >= state.m_height_screens)
             continue;
@@ -194,7 +226,7 @@ void MainWindow::ScreenWnd_RedrawScreen()
 
         for (int x = 0; x < 256; ++x)
         {
-            int world_x = x + ui->slider_screen_h->value();
+            int world_x = x + ui->scroll_screen_h->value();
             int screen_x = world_x / 256;
             if (screen_x < 0 || screen_x >= state.m_width_screens)
                 continue;
@@ -248,9 +280,28 @@ void MainWindow::ScreenWnd_RedrawScreen()
         }
     }
 
-    ui->label_screen_render->setPixmap(QPixmap::fromImage(image));
-    ui->label_screen_render->setMinimumSize(image.size());
-    ui->label_screen_render->setMaximumSize(image.size());
+    QImage scaled = image.scaled(image.width()*m_zoom, image.height()*m_zoom);
+    if (ui->checkBox_screen_draw_grid->isChecked())
+    {
+        QPainter painter(&scaled);
+        painter.setPen(QColor(0xFF00FF00));
+        for (int y = 0; y < 240; ++y)
+        {
+            int world_y = y + ui->scroll_screen_v->value();
+            if ((int)(world_y & 15) == 0)
+                painter.drawLine(0, y*m_zoom, scaled.width(), y*m_zoom);
+        }
+        for (int x = 0; x < 256; ++x)
+        {
+            int world_x = x + ui->scroll_screen_h->value();
+            if ((int)(world_x & 15) == 0)
+                painter.drawLine(x*m_zoom, 0, x*m_zoom, scaled.height());
+        }
+    }
+
+    ui->label_screen_render->setPixmap(QPixmap::fromImage(scaled));
+    ui->label_screen_render->setMinimumSize(scaled.size());
+    ui->label_screen_render->setMaximumSize(scaled.size());
 }
 
 
