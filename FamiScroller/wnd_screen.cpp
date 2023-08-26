@@ -14,6 +14,7 @@ void MainWindow::ScreenWnd_Init()
     sizes << 250 << 40;
     ui->splitter_screen->setSizes(sizes);
     ui->label_screen_render->installEventFilter(this);
+    ui->widget_screen_pattern->setVisible(ui->checkBox_screen_patter->isChecked());
 }
 
 void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
@@ -142,7 +143,8 @@ void MainWindow::ScreenWnd_FullRedraw()
         auto image_itt = s_block_image_map.find(block_itt->first);
         if (image_itt == s_block_image_map.end())
             continue;
-        ui->listWidget_screen->addItem( new QListWidgetItem(QIcon(QPixmap::fromImage(image_itt->second.scaled(32, 32))), block_itt->second.name) );
+        ui->listWidget_screen->addItem( new QListWidgetItem(QIcon(QPixmap::fromImage(image_itt->second.scaled(32, 32))),
+                    QString("%1:").arg( block_itt->first, 2, 16, QChar('0') ).toUpper() + block_itt->second.name) );
 
     }
     ui->listWidget_screen->blockSignals(false);
@@ -163,6 +165,12 @@ void MainWindow::on_scroll_screen_v_valueChanged(int value)
 void MainWindow::on_scroll_screen_h_valueChanged(int value)
 {
    ScreenWnd_RedrawScreen();
+}
+
+
+void MainWindow::on_checkBox_screen_show_block_index_clicked()
+{
+    ScreenWnd_RedrawScreen();
 }
 
 void MainWindow::ScreenWnd_RedrawScreen()
@@ -299,6 +307,29 @@ void MainWindow::ScreenWnd_RedrawScreen()
         }
     }
 
+    if (ui->checkBox_screen_show_block_index->isChecked())
+    {
+        QPainter painter(&scaled);
+        painter.setPen(QColor(0xFFFFFFFF));
+
+        for (auto itt = state.m_world.begin(); itt != state.m_world.end(); ++itt)
+        {
+            int screen_x = itt->first.first * 256 - ui->scroll_screen_h->value();
+            int screen_y = itt->first.second * 256 - ui->scroll_screen_v->value();
+            if (screen_x >= 256 || screen_x < -256 ||
+                screen_y >= 240 || screen_y < -256)
+                continue;
+            for (int i = 0; i < 256; ++i)
+            {
+                int block_x = (i & 15) * 16 + screen_x;
+                int block_y = (i >> 4) * 16 + screen_y;
+                if (block_x > 256 || block_y > 240 || block_x < -16 || block_y < -16)
+                    continue;
+                painter.drawText((block_x + 6)*m_zoom, (block_y + 6)*m_zoom, QString("%1").arg( (uint16_t)itt->second.block[i], 2, 16, QChar('0') ).toUpper());
+            }
+        }
+    }
+
     ui->label_screen_render->setPixmap(QPixmap::fromImage(scaled));
     ui->label_screen_render->setMinimumSize(scaled.size());
     ui->label_screen_render->setMaximumSize(scaled.size());
@@ -306,6 +337,316 @@ void MainWindow::ScreenWnd_RedrawScreen()
 
 
 
+void MainWindow::on_checkBox_screen_patter_clicked()
+{
+    ui->widget_screen_pattern->setVisible(ui->checkBox_screen_patter->isChecked());
+}
+
+static uint8_t SMB1_GetSky(int x, int y)
+{
+  if ( y < 2 || y >= 13 )
+    return 0;
+  uint8_t xi = x%48;
+  if ( y == 2 )
+  {
+    switch( xi )
+    {
+      case 19:
+      case 36:
+        return 0x55;
+      case 20:
+      case 37:
+      case 38:
+        return 0x56;
+      case 21:
+      case 39:
+        return 0x57;
+    }
+    return 0;
+  } else if ( y == 3 )
+  {
+    switch( xi )
+    {
+      case 8:
+      case 27:
+        return 0x55;
+      case 9:
+      case 28:
+      case 29:
+      case 30:
+        return 0x56;
+      case 10:
+      case 31:
+        return 0x57;
+      case 19:
+      case 36:
+        return 0x58;
+      case 20:
+      case 37:
+      case 38:
+        return 0x59;
+      case 21:
+      case 39:
+        return 0x5A;
+    }
+    return 0;
+  } else if ( y == 4 )
+  {
+    switch( xi )
+    {
+      case 8:
+      case 27:
+        return 0x58;
+      case 9:
+      case 28:
+      case 29:
+      case 30:
+        return 0x59;
+      case 10:
+      case 31:
+        return 0x5A;
+    }
+    return 0;
+  } else
+    return 0;
+}
+
+static uint8_t SMB1_GetGrass(int x, int y)
+{
+  if ( y < 3 || y >= 13 )
+    return 0;
+  uint8_t xi = x%48;
+  if ( y == 10 )
+  {
+    if (xi == 2)
+      return 7;
+    else
+      return 0;
+  } else if ( y == 11 )
+  {
+    switch(xi)
+    {
+      case 1:
+        return 0x05;
+      case 2:
+        return 0x09;
+      case 3:
+        return 0x08;
+      case 17:
+        return 0x07;
+    }
+    return 0;
+  } else if ( y == 12 )
+  {
+    static const uint8_t data[24] = {0x59,0xA9,0x80,0x00,0x00,0x02,0x33,0x34,   0x59,0x80,0x00,0x02,0x34,0x00,0x00,0x00,  0x00,0x00,0x00,0x00,0x02,0x34,0x00,0x00};
+    if ( (xi&1) == 0 )
+      return (data[xi>>1] >> 4);
+    else
+      return (data[xi>>1] & 0xF);
+  } else
+    return 0;
+}
+
+static uint8_t SMB1_GetSky2(int x, int y)
+{
+  if ( y < 2 || y >= 13 )
+    return 0;
+  uint8_t xi = x%48;
+  if ( y == 2 )
+  {
+    switch( xi )
+    {
+      case 18:
+        return 0x55;
+      case 19:
+      case 20:
+        return 0x56;
+      case 21:
+        return 0x57;
+    }
+    return 0;
+  } else if ( y == 3 )
+  {
+    switch( xi )
+    {
+      case 3:
+        return 0x55;
+      case 4:
+      case 5:
+        return 0x56;
+      case 6:
+        return 0x57;
+
+      case 18:
+        return 0x58;
+      case 19:
+      case 20:
+        return 0x59;
+      case 21:
+        return 0x5A;
+    }
+    return 0;
+  } else if ( y == 4 )
+  {
+    switch( xi )
+    {
+      case 3:
+        return 0x58;
+      case 4:
+      case 5:
+        return 0x59;
+      case 6:
+        return 0x5A;
+    }
+    return 0;
+  } else if ( y == 6 )
+  {
+    switch( xi )
+    {
+      case 38:
+        return 0x55;
+      case 39:
+        return 0x56;
+      case 40:
+        return 0x57;
+    }
+    return 0;
+  } else if ( y == 7 )
+  {
+    switch( xi )
+    {
+      case 9:
+        return 0x55;
+      case 10:
+        return 0x56;
+      case 11:
+        return 0x57;
+
+    case 35:
+      return 0x55;
+    case 36:
+      return 0x56;
+    case 37:
+      return 0x57;
+
+    case 38:
+      return 0x58;
+    case 39:
+      return 0x59;
+    case 40:
+      return 0x5A;
+
+    }
+    return 0;
+  } else if ( y == 8 )
+  {
+    switch( xi )
+    {
+      case 9:
+        return 0x58;
+      case 10:
+        return 0x59;
+      case 11:
+        return 0x5A;
+
+    case 35:
+      return 0x58;
+    case 36:
+      return 0x59;
+    case 37:
+      return 0x5A;
+    }
+    return 0;
+  } else if ( y == 11 )
+  {
+    switch( xi )
+    {
+      case 28:
+        return 0x55;
+      case 29:
+        return 0x56;
+      case 30:
+        return 0x57;
+    case 46:
+      return 0x55;
+    case 47:
+      return 0x56;
+    case 0:
+      return 0x57;
+    }
+    return 0;
+  } else if ( y == 12 )
+  {
+    switch( xi )
+    {
+      case 28:
+        return 0x58;
+      case 29:
+        return 0x59;
+      case 30:
+        return 0x5A;
+    case 46:
+      return 0x58;
+    case 47:
+      return 0x59;
+    case 0:
+      return 0x5A;
+    }
+    return 0;
+  }  else
+    return 0;
+}
+
+void MainWindow::on_btn_screen_smb_bg_clicked()
+{
+    State state = m_state.back();
+    for (auto itt = state.m_world.begin(); itt != state.m_world.end(); ++itt)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            int block_x = (i & 15);
+            int block_y = (i >> 4);
+
+            uint8_t id = 0;
+            if (itt->first.second == state.m_height_screens-1)
+                id |= SMB1_GetGrass(block_x + itt->first.first*16, block_y);
+            id |= SMB1_GetSky(block_x + itt->first.first*16, block_y);
+            if (itt->second.block[i] == 0)
+                itt->second.block[i] = id;
+        }
+    }
+    StatePush(state);
+    ScreenWnd_RedrawScreen();
+}
 
 
+void MainWindow::on_btn_screen_fill_clicked()
+{
+    State state = m_state.back();
+    int fill_id = ui->listWidget_screen->currentRow();
+    for (auto itt = state.m_world.begin(); itt != state.m_world.end(); ++itt)
+    {
+        for (int i = 0; i < 256; ++i)
+            itt->second.block[i] = fill_id;
+    }
+    StatePush(state);
+    ScreenWnd_RedrawScreen();
+}
 
+
+void MainWindow::on_btn_screen_smb_sky_clicked()
+{
+    State state = m_state.back();
+    for (auto itt = state.m_world.begin(); itt != state.m_world.end(); ++itt)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            int block_x = (i & 15);
+            int block_y = (i >> 4);
+            if (itt->second.block[i] == 0)
+                itt->second.block[i] = SMB1_GetSky2(block_x + itt->first.first*16, block_y);
+        }
+    }
+    StatePush(state);
+    ScreenWnd_RedrawScreen();
+}

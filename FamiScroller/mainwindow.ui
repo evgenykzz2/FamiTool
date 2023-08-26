@@ -859,9 +859,70 @@
              <widget class="QListWidget" name="listWidget_screen"/>
             </item>
             <item>
+             <widget class="Line" name="line_3">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="checkBox_screen_patter">
+              <property name="text">
+               <string>Draw Pattern</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="widget_screen_pattern" native="true">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>0</height>
+               </size>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_11">
+               <item>
+                <widget class="QPushButton" name="btn_screen_fill">
+                 <property name="text">
+                  <string>Fill All</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btn_screen_smb_bg">
+                 <property name="text">
+                  <string>SMB1 graas and sky</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btn_screen_smb_sky">
+                 <property name="text">
+                  <string>SMB1 sky</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QCheckBox" name="checkBox_screen_draw_grid">
               <property name="text">
                <string>DrawGrid</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="checkBox_screen_show_block_index">
+              <property name="text">
+               <string>Show Block Index</string>
               </property>
              </widget>
             </item>

@@ -112,6 +112,16 @@ private slots:
     void on_scroll_screen_v_valueChanged(int value);
     void on_scroll_screen_h_valueChanged(int value);
 
+    void on_checkBox_screen_show_block_index_clicked();
+
+    void on_checkBox_screen_patter_clicked();
+
+    void on_btn_screen_smb_bg_clicked();
+
+    void on_btn_screen_fill_clicked();
+
+    void on_btn_screen_smb_sky_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
