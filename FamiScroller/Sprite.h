@@ -50,6 +50,7 @@ struct Block
     QString name;
     uint8_t tile_id[4];
     uint8_t palette;
+    QString overlay;
 };
 
 

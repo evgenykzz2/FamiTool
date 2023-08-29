@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <Windows.h>
 #include <QShortcut>
+#include <QFileInfo>
 
 //static QLabel* s_attribute_tab_render;
 //static QLabel* s_oam_tab_render;
@@ -248,6 +249,8 @@ void MainWindow::SaveProject(const QString &file_name)
                 item_obj["t2"] = picojson::value( (double)(itt->second.tile_id[2]) );
                 item_obj["t3"] = picojson::value( (double)(itt->second.tile_id[3]) );
                 item_obj["pal"] = picojson::value( (double)(itt->second.palette) );
+                if (!itt->second.overlay.isEmpty())
+                    item_obj["overlay"] = picojson::value( itt->second.overlay.toUtf8().toBase64().data() );
                 items.push_back(picojson::value(item_obj));
         }
         json.get<picojson::object>()["block_map"] = picojson::value(items);
@@ -377,6 +380,9 @@ void MainWindow::LoadProject(const QString &file_name)
         return;
     }
 
+    QFileInfo project_file_info(file_name);
+    QDir project_dir(project_file_info.dir());
+
 
     State state;
 
@@ -431,14 +437,17 @@ void MainWindow::LoadProject(const QString &file_name)
         {
             ChrSet chr_set;
             int id = (int)(itt->get<picojson::object>()["id"].get<double>());
-            chr_set.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            chr_set.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));                 
             chr_set.file_name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["file_name"].get<std::string>() .c_str()));
+            QFileInfo info(chr_set.file_name);
+            if (info.isAbsolute())
+                chr_set.file_name = project_dir.relativeFilePath(chr_set.file_name);
 
             if (!chr_set.file_name.isEmpty())
             {
                 chr_set.chr_data = std::make_shared<std::vector<uint8_t>>(2048, 0x00);
 
-                QFile file(chr_set.file_name);
+                QFile file(project_dir.absoluteFilePath(chr_set.file_name));
                 QByteArray byte_array;
                 if (file.open(QFile::ReadOnly))
                 {
@@ -487,6 +496,13 @@ void MainWindow::LoadProject(const QString &file_name)
             block.tile_id[2] = (int)itt->get<picojson::object>()["t2"].get<double>();
             block.tile_id[3] = (int)itt->get<picojson::object>()["t3"].get<double>();
             block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
+            if (itt->contains("overlay"))
+            {
+                block.overlay = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["overlay"].get<std::string>() .c_str()));
+                QFileInfo info(block.overlay);
+                if (info.isAbsolute())
+                    block.overlay = project_dir.relativeFilePath(block.overlay);
+            }
             state.m_block_map.insert(std::make_pair(id, block));
         }
     }
@@ -559,8 +575,6 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_screen)
         ScreenWnd_FullRedraw();
 }
-
-
 
 
 

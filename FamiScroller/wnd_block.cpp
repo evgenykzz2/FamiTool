@@ -5,7 +5,9 @@
 #include <iostream>
 #include <QFileDialog>
 #include <QMessageBox>
+#include "picojson.h"
 
+static std::map<QString, QImage> s_image_hash;
 
 void MainWindow::BlockWnd_Init()
 {
@@ -323,6 +325,9 @@ void MainWindow::BlockWnd_RedrawBlock()
     }
     //ui->comboBox_block_set_palette->setCurrentIndex(block_itt->second.palette);
 
+    if (block_itt->second.overlay != ui->lineEdit_block_overlay->text())
+        ui->lineEdit_block_overlay->setText(block_itt->second.overlay);
+
     int chr0_id = ui->comboBox_block_chr0->itemData(state.m_block_chr0).toInt();
     int chr1_id = ui->comboBox_block_chr1->itemData(state.m_block_chr1).toInt();
 
@@ -369,6 +374,38 @@ void MainWindow::BlockWnd_RedrawBlock()
             }
         }
     }
+
+    if (!block_itt->second.overlay.isEmpty())
+    {
+        auto image_itt = s_image_hash.find(block_itt->second.overlay);
+        if (image_itt == s_image_hash.end())
+        {
+            QFileInfo project_file_info(m_project_file_name);
+            QDir project_dir(project_file_info.dir());
+            QImage image(project_dir.absoluteFilePath(block_itt->second.overlay));
+            if (image.format() != QImage::Format_ARGB32)
+                image = image.convertToFormat(QImage::Format_ARGB32);
+            s_image_hash.insert(std::make_pair(block_itt->second.overlay, image));
+            image_itt = s_image_hash.find(block_itt->second.overlay);
+        }
+
+        for (int y = 0; y < image.height(); ++y)
+        {
+            if (y >= image_itt->second.height())
+                break;
+            uint8_t* line_ptr = image.scanLine(y);
+            uint8_t* src_ptr = image_itt->second.scanLine(y);
+            for (int x = 0; x < image.width(); ++x)
+            {
+                if (x >= image_itt->second.width())
+                    break;
+                line_ptr[x*4+0] = (src_ptr[x*4+3] * src_ptr[x*4+0] + (255 - src_ptr[x*4+3])*line_ptr[x*4+0]) / 255;
+                line_ptr[x*4+1] = (src_ptr[x*4+3] * src_ptr[x*4+1] + (255 - src_ptr[x*4+3])*line_ptr[x*4+1]) / 255;
+                line_ptr[x*4+2] = (src_ptr[x*4+3] * src_ptr[x*4+2] + (255 - src_ptr[x*4+3])*line_ptr[x*4+2]) / 255;
+            }
+        }
+    }
+
     int sz = 128;
     image = image.scaled(sz*2, sz*2);
     {
@@ -395,4 +432,143 @@ void MainWindow::BlockWnd_RedrawBlock()
     ui->widget_block_param->setVisible(true);
 }
 
+
+
+void MainWindow::on_btn_block_overlay_browse_clicked()
+{
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select overlay 16x16 image"), QDir::currentPath(), tr("*.png *.gif *.bmp"));
+    if (file_name.isEmpty())
+        return;
+
+    QFileInfo project_file_info(m_project_file_name);
+    QDir project_dir(project_file_info.dir());
+    QFileInfo info(file_name);
+    if (info.isAbsolute())
+        file_name = project_dir.relativeFilePath(file_name);
+
+    State state = m_state.back();
+    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+    auto block_itt = state.m_block_map.find(block_id);
+    if (block_itt == state.m_block_map.end())
+        return;
+
+    block_itt->second.overlay = file_name;
+    StatePush(state);
+    BlockWnd_RedrawBlock();
+}
+
+
+void MainWindow::on_btn_block_overlay_clear_clicked()
+{
+    State state = m_state.back();
+    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+    auto block_itt = state.m_block_map.find(block_id);
+    if (block_itt == state.m_block_map.end())
+        return;
+
+    block_itt->second.overlay = "";
+    StatePush(state);
+    BlockWnd_RedrawBlock();
+}
+
+
+
+
+void MainWindow::on_btn_block_export_all_clicked()
+{
+    QString file_name = QFileDialog::getSaveFileName(this, "Export blocks", QDir::currentPath(), "*.famiscroll-blocks");
+    if (file_name.isEmpty())
+        return;
+
+    State state = m_state.back();
+
+    picojson::value json;
+    json.set<picojson::object>(picojson::object());
+
+    json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
+    json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
+    json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
+    json.get<picojson::object>()["block_tile_slot"] = picojson::value( (double)state.m_block_tile_slot );
+    picojson::array items = picojson::array();
+    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+    {
+            picojson::object item_obj;
+            item_obj["id"] = picojson::value( (double)(itt->first) );
+            item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+            item_obj["t0"] = picojson::value( (double)(itt->second.tile_id[0]) );
+            item_obj["t1"] = picojson::value( (double)(itt->second.tile_id[1]) );
+            item_obj["t2"] = picojson::value( (double)(itt->second.tile_id[2]) );
+            item_obj["t3"] = picojson::value( (double)(itt->second.tile_id[3]) );
+            item_obj["pal"] = picojson::value( (double)(itt->second.palette) );
+            if (!itt->second.overlay.isEmpty())
+                item_obj["overlay"] = picojson::value( itt->second.overlay.toUtf8().toBase64().data() );
+            items.push_back(picojson::value(item_obj));
+    }
+    json.get<picojson::object>()["block_map"] = picojson::value(items);
+
+    QString json_str = QString::fromStdString(json.serialize(true));
+    QFile file(file_name);
+    file.open(QFile::WriteOnly);
+    if (file.error())
+    {
+        QMessageBox::critical(0, "Error", "Can't write file: " + file.errorString());
+        return;
+    }
+    file.write(json_str.toLocal8Bit());
+    file.close();
+}
+
+
+void MainWindow::on_btn_block_import_all_clicked()
+{
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Import blocks"), QDir::currentPath(), "*.famiscroll-blocks");
+     if (file_name.isEmpty())
+         return;
+
+    QString json_str;
+    QFile file(file_name);
+    if (file.open(QFile::ReadOnly))
+    {
+        json_str = QString(file.readAll());
+        file.close();
+    } else
+    {
+        QMessageBox::critical(0, "Error", "Can't read file: " + file.errorString());
+        return;
+    }
+
+    QFileInfo project_file_info(m_project_file_name);
+    QDir project_dir(project_file_info.dir());
+
+    picojson::value json;
+    picojson::parse(json, json_str.toStdString());
+
+    State state = m_state.back();
+    state.m_block_map_index = 0;
+    state.m_block_map.clear();
+
+    if (json.contains("block_map"))
+    {
+        picojson::array items = json.get<picojson::object>()["block_map"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
+        {
+            Block block;
+            int id = (int)(itt->get<picojson::object>()["id"].get<double>());
+            block.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            block.tile_id[0] = (int)itt->get<picojson::object>()["t0"].get<double>();
+            block.tile_id[1] = (int)itt->get<picojson::object>()["t1"].get<double>();
+            block.tile_id[2] = (int)itt->get<picojson::object>()["t2"].get<double>();
+            block.tile_id[3] = (int)itt->get<picojson::object>()["t3"].get<double>();
+            block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
+            if (itt->contains("overlay"))
+                block.overlay = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["overlay"].get<std::string>() .c_str()));
+            QFileInfo info(block.overlay);
+            if (info.isAbsolute())
+                block.overlay = project_dir.relativeFilePath(block.overlay);
+            state.m_block_map.insert(std::make_pair(id, block));
+        }
+    }
+    StatePush(state);
+    BlockWnd_FullRedraw();
+}
 

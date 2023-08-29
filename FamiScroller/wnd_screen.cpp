@@ -4,9 +4,12 @@
 #include <QIcon>
 #include <QMouseEvent>
 #include <iostream>
+#include <QFileInfo>
+#include <QDir>
 
 static std::map<int, QImage> s_block_image_map;
 static double m_zoom = 1.0;
+static std::map<QString, QImage> s_image_hash;
 
 void MainWindow::ScreenWnd_Init()
 {
@@ -77,6 +80,9 @@ void MainWindow::ScreenWnd_FullRedraw()
     ui->scroll_screen_v->setMaximum(state.m_height_screens*256 - 240);
     ui->scroll_screen_v->blockSignals(false);
 
+    QFileInfo project_file_info(m_project_file_name);
+    QDir project_dir(project_file_info.dir());
+
     //Build images
     {
         auto chr0_itt = state.m_chr_map.begin();
@@ -130,6 +136,28 @@ void MainWindow::ScreenWnd_FullRedraw()
                         }
                     }
                 }
+
+                if (!block_itt->second.overlay.isEmpty())
+                {
+                    QImage over(project_dir.absoluteFilePath(block_itt->second.overlay));
+                    if (over.format() != QImage::Format_ARGB32)
+                        over = over.convertToFormat(QImage::Format_ARGB32);
+                    for (int y = 0; y < image.height(); ++y)
+                    {
+                        if (y >= over.height())
+                            break;
+                        uint8_t* line_ptr = image.scanLine(y);
+                        uint8_t* src_ptr = over.scanLine(y);
+                        for (int x = 0; x < image.width(); ++x)
+                        {
+                            if (x >= over.width())
+                                break;
+                            line_ptr[x*4+0] = (src_ptr[x*4+3] * src_ptr[x*4+0] + (255 - src_ptr[x*4+3])*line_ptr[x*4+0]) / 255;
+                            line_ptr[x*4+1] = (src_ptr[x*4+3] * src_ptr[x*4+1] + (255 - src_ptr[x*4+3])*line_ptr[x*4+1]) / 255;
+                            line_ptr[x*4+2] = (src_ptr[x*4+3] * src_ptr[x*4+2] + (255 - src_ptr[x*4+3])*line_ptr[x*4+2]) / 255;
+                        }
+                    }
+                }
                 s_block_image_map.insert(std::make_pair(block_itt->first, image));
             }
         }
@@ -173,6 +201,13 @@ void MainWindow::on_checkBox_screen_show_block_index_clicked()
     ScreenWnd_RedrawScreen();
 }
 
+void MainWindow::on_checkBox_screen_draw_overlay_clicked()
+{
+    ScreenWnd_RedrawScreen();
+}
+
+
+
 void MainWindow::ScreenWnd_RedrawScreen()
 {
     QImage image(256, 240, QImage::Format_ARGB32);
@@ -199,6 +234,9 @@ void MainWindow::ScreenWnd_RedrawScreen()
 
     auto palette_itt = state.m_palette_map.begin();
     const uint32_t* palette = GetPalette(state.m_palette);
+
+    QFileInfo project_file_info(m_project_file_name);
+    QDir project_dir(project_file_info.dir());
 
     std::pair<int, int> screen_key = std::make_pair(0, 0);
     auto screen_itt = state.m_world.find(screen_key);
@@ -285,8 +323,29 @@ void MainWindow::ScreenWnd_RedrawScreen()
 
             uint8_t color = palette_itt->second.color[block_itt->second.palette*4 | c];
             image_line[x] = palette[color];
+
+            if (ui->checkBox_screen_draw_overlay->isChecked() && !block_itt->second.overlay.isEmpty())
+            {
+                auto image_itt = s_image_hash.find(block_itt->second.overlay);
+                if (image_itt == s_image_hash.end())
+                {
+                    QImage image(project_dir.absoluteFilePath(block_itt->second.overlay));
+                    if (image.format() != QImage::Format_ARGB32)
+                        image = image.convertToFormat(QImage::Format_ARGB32);
+                    s_image_hash.insert(std::make_pair(block_itt->second.overlay, image));
+                    image_itt = s_image_hash.find(block_itt->second.overlay);
+                }
+                if (inblock_x < image_itt->second.width() && inblock_y < image_itt->second.height())
+                {
+                    uint8_t* src_ptr = image_itt->second.scanLine(inblock_y);
+                    ((uint8_t*)image_line)[x*4+0] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+0] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+0]) / 255;
+                    ((uint8_t*)image_line)[x*4+1] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+1] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+1]) / 255;
+                    ((uint8_t*)image_line)[x*4+2] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+2] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+2]) / 255;
+                }
+            }
         }
     }
+
 
     QImage scaled = image.scaled(image.width()*m_zoom, image.height()*m_zoom);
     if (ui->checkBox_screen_draw_grid->isChecked())

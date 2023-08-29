@@ -184,9 +184,9 @@ static void PrintBuffer(std::stringstream &stream, std::vector<uint8_t>& buffer)
     }
 }
 
+#if 0
 void MainWindow::on_pushButton_export_clicked()
 {
-#if 0
     QString file_name = QFileDialog::getSaveFileName(this, "Asm include file", QDir::currentPath(), "*.inc");
     if (file_name.isEmpty())
         return;
@@ -513,9 +513,166 @@ void MainWindow::on_pushButton_export_clicked()
         file.write((const char*)chr.data(), chr.size());
         file.close();
     }*/
-#endif
 }
 
+#endif
+
+void MainWindow::on_btn_export_blocks_clicked()
+{
+    QString file_name = QFileDialog::getSaveFileName(this, "Export blocs", QDir::currentPath(), "*.inc");
+    if (file_name.isEmpty())
+        return;
+    State state = m_state.back();
+
+    std::stringstream stream;
+    stream << state.m_name.toStdString() << "_block_tiles:" << std::endl;
+    stream << "  .db low(" <<state.m_name.toStdString() << "_block_tiles_0), " << " high(" <<state.m_name.toStdString() << "_block_tiles_0)" << std::endl;
+    stream << "  .db low(" <<state.m_name.toStdString() << "_block_tiles_1), " << " high(" <<state.m_name.toStdString() << "_block_tiles_1)" << std::endl;
+    stream << "  .db low(" <<state.m_name.toStdString() << "_block_tiles_2), " << " high(" <<state.m_name.toStdString() << "_block_tiles_2)" << std::endl;
+    stream << "  .db low(" <<state.m_name.toStdString() << "_block_tiles_3), " << " high(" <<state.m_name.toStdString() << "_block_tiles_3)" << std::endl;
+    stream << std::endl;
+
+    for (int tile = 0; tile < 4; ++tile)
+    {
+        int pos = 0;
+        stream << state.m_name.toStdString() << "_block_tiles_" << std::dec << tile << ":" << std::endl;
+        for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+        {
+            if (pos == 0)
+                stream << "  .db";
+            else
+                stream << ",";
+            stream << " $" << std::hex << std::setw(2) << std::setfill('0') << (uint16_t)itt->second.tile_id[tile];
+            ++pos;
+            auto next = itt;
+            ++next;
+            if (pos == 16 || next == state.m_block_map.end())
+            {
+                stream << std::endl;
+                pos = 0;
+            }
+        }
+        stream << std::endl;
+    }
+
+
+
+    stream << state.m_name.toStdString() << "_block_palette:" << std::endl;
+    int n = 0;
+    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+    {
+        stream << "  .db $" << std::hex << std::setw(2) << std::setfill('0')
+               << (uint16_t)(itt->second.palette | (itt->second.palette << 2) | (itt->second.palette << 4) | (itt->second.palette << 6))
+               << std::endl;
+        ++n;
+    }
+
+    QFile file(file_name);
+    file.open(QFile::WriteOnly);
+    file.write((const char*)stream.str().c_str(), stream.str().size());
+    file.close();
+}
+
+
+void MainWindow::on_btn_export_screens_clicked()
+{
+    QString file_name = QFileDialog::getSaveFileName(this, "Export blocs", QDir::currentPath(), "*.inc");
+    if (file_name.isEmpty())
+        return;
+    State state = m_state.back();
+
+    std::stringstream stream;
+
+    stream << state.m_name.toStdString() << "_data:" << std::endl;
+    stream << "  ;0: size" << std::endl;
+    stream << "  .db " << state.m_width_screens << " ;screen map width" << std::endl;
+    stream << "  .db " << state.m_height_screens << " ;screen map height" << std::endl;
+    stream << "  ;2: screen map pointer" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_map)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_map)" << std::endl;
+    stream << "  ;4: block tiles 2x2" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_block_tiles)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_block_tiles)" << std::endl;
+    stream << "  ;6: block palette" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
+    stream << "  ;8: block flags" << std::endl;
+    //stream << "  .db low(block_flags)" << std::endl;
+    //stream << "  .db high(block_flags)" << std::endl;
+    stream << "  .db 0" << std::endl;
+    stream << "  .db 0" << std::endl;
+    stream << "  ;A,B: scroll minimum x" << std::endl;
+    stream << "  .db 0, 0" << std::endl;
+    stream << "  ;C,D: scroll maximum x" << std::endl;
+    stream << "  .db 0, " << (state.m_width_screens-1) << std::endl;
+    stream << "  ;E,F: scroll minimum y" << std::endl;
+    stream << "  .db 0, 0" << std::endl;
+    stream << "  ;10,11: scroll maximum y" << std::endl;
+    stream << "  .db 0, " << (state.m_height_screens-1) << std::endl;
+    stream << std::endl;
+
+    std::vector<int> screen_id;
+    std::map<std::vector<uint8_t>, int> screen_map;
+    std::vector<std::vector<uint8_t>> screen_vec;
+
+    for (int y = 0; y < state.m_height_screens; ++y)
+    {
+        for (int x = 0; x < state.m_width_screens; ++x)
+        {
+            auto screen_itt = state.m_world.find(std::make_pair(x, y));
+            if (screen_itt == state.m_world.end())
+            {
+                QMessageBox::critical(0, "Error", "Something went wrong");
+                return;
+            }
+            std::vector<uint8_t> blocks(256);
+            memcpy(blocks.data(), screen_itt->second.block, blocks.size());
+            auto itt = screen_map.find(blocks);
+            if (itt == screen_map.end())
+            {
+                int id = screen_map.size();
+                screen_map.insert(std::make_pair(blocks, id));
+                screen_vec.push_back(blocks);
+                screen_id.push_back(id);
+            } else
+            {
+                screen_id.push_back(itt->second);
+            }
+        }
+    }
+
+    stream << state.m_name.toStdString() << "_map:" << std::endl;
+    for (size_t n = 0; n < screen_id.size(); ++n)
+    {
+        stream << "  .db low(" << state.m_name.toStdString() << "_scr_" << std::dec << screen_id[n] << "),"
+               << "  high(" << state.m_name.toStdString() << "_scr_" << std::dec << screen_id[n] << ")"
+               << std::endl;
+    }
+    stream << std::endl;
+
+    for (size_t n = 0; n < screen_vec.size(); ++n)
+    {
+        stream << state.m_name.toStdString() << "_scr_" << std::dec << n << ":" << std::endl;
+        for (int y = 0; y < 16; ++y)
+        {
+            stream << "  .db ";
+            for (int x = 0; x < 16; ++x)
+            {
+                if (x != 0)
+                    stream << ", ";
+                stream << "$" << std::hex << std::setw(2) << std::setfill('0')
+                       << (uint16_t)screen_vec[n][x+y*16];
+            }
+            stream << std::endl;
+        }
+        stream << std::endl;
+    }
+
+    QFile file(file_name);
+    file.open(QFile::WriteOnly);
+    file.write((const char*)stream.str().c_str(), stream.str().size());
+    file.close();
+}
 
 
 

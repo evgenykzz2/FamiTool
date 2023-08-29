@@ -88,7 +88,6 @@ private slots:
     void on_actionSave_triggered();
     void on_actionSave_as_triggered();
     void on_tabWidget_currentChanged(int index);
-    void on_pushButton_export_clicked();
     void on_edit_width_in_screens_editingFinished();
     void on_edit_height_in_screens_editingFinished();
     void on_btn_palette_set_add_clicked();
@@ -111,16 +110,18 @@ private slots:
     void on_checkBox_screen_draw_grid_clicked();
     void on_scroll_screen_v_valueChanged(int value);
     void on_scroll_screen_h_valueChanged(int value);
-
     void on_checkBox_screen_show_block_index_clicked();
-
     void on_checkBox_screen_patter_clicked();
-
     void on_btn_screen_smb_bg_clicked();
-
     void on_btn_screen_fill_clicked();
-
     void on_btn_screen_smb_sky_clicked();
+    void on_btn_block_overlay_browse_clicked();
+    void on_btn_block_overlay_clear_clicked();
+    void on_checkBox_screen_draw_overlay_clicked();
+    void on_btn_block_export_all_clicked();
+    void on_btn_block_import_all_clicked();
+    void on_btn_export_blocks_clicked();
+    void on_btn_export_screens_clicked();
 
 private:
     Ui::MainWindow *ui;
