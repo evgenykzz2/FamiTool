@@ -154,6 +154,16 @@ MainWindow::MainWindow(QWidget *parent)
     ui->comboBox_chr_align->addItem("Align 4KB", QVariant((int)ChrAlign_4K));
     ui->comboBox_chr_align->addItem("Align 8KB", QVariant((int)ChrAlign_8K));
     ui->comboBox_chr_align->blockSignals(false);
+
+    //-------------------------------------------------------------------------------
+    ui->comboBox_export_sprite_offset->addItem("$0000", QVariant((int)0x000));
+    ui->comboBox_export_sprite_offset->addItem("$0400", QVariant((int)0x040));
+    ui->comboBox_export_sprite_offset->addItem("$0800", QVariant((int)0x080));
+    ui->comboBox_export_sprite_offset->addItem("$0C00", QVariant((int)0x0C0));
+    ui->comboBox_export_sprite_offset->addItem("$1000", QVariant((int)0x100));
+    ui->comboBox_export_sprite_offset->addItem("$1400", QVariant((int)0x140));
+    ui->comboBox_export_sprite_offset->addItem("$1800", QVariant((int)0x180));
+    ui->comboBox_export_sprite_offset->addItem("$1C00", QVariant((int)0x1C0));
 }
 
 MainWindow::~MainWindow()
@@ -841,7 +851,7 @@ void MainWindow::on_pushButton_clear_colormapping_clicked()
 
 void MainWindow::on_pushButton_sprite_browse_clicked()
 {
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), QDir::currentPath(), tr("*.jpg *.png"));
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("*.jpg *.png"));
      if (file_name.isEmpty())
          return;
 
@@ -867,7 +877,7 @@ void MainWindow::on_actionExit_triggered()
 
 void MainWindow::on_actionOpen_triggered()
 {
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), QDir::currentPath(), "*.famiscreen");
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), "", "*.famiscreen");
      if (file_name.isEmpty())
          return;
     m_project_file_name = file_name;
@@ -884,7 +894,7 @@ void MainWindow::on_actionSave_triggered()
 
 void MainWindow::on_actionSave_as_triggered()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", QDir::currentPath(), "*.famiscreen");
+    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", "", "*.famiscreen");
     if (file_name.isEmpty())
         return;
     //if (file_name.right(8) != ".famiscreen")
@@ -1012,6 +1022,19 @@ void MainWindow::SaveProject(const QString &file_name)
     int irq1 = ui->edit_irq_1->text().toInt();
     if (irq1 != 0)
         json.get<picojson::object>()["irq1"] = picojson::value( (double)irq1 );
+
+
+    if (!ui->lineEdit_animation_browse2->text().isEmpty())
+        json.get<picojson::object>()["animation_f2"] = picojson::value( ui->lineEdit_animation_browse2->text().toUtf8().toBase64().data() );
+    if (!ui->lineEdit_animation_browse2->text().isEmpty())
+        json.get<picojson::object>()["animation_f3"] = picojson::value( ui->lineEdit_animation_browse3->text().toUtf8().toBase64().data() );
+    if (!ui->lineEdit_animation_browse2->text().isEmpty())
+        json.get<picojson::object>()["animation_f4"] = picojson::value( ui->lineEdit_animation_browse4->text().toUtf8().toBase64().data() );
+
+    if (ui->checkBox_export_nobg->isChecked())
+        json.get<picojson::object>()["export_nobg"] = picojson::value( 1.0 );
+
+    json.get<picojson::object>()["export_sprites_offset"] = picojson::value( (double)ui->comboBox_export_sprite_offset->itemData(ui->comboBox_export_sprite_offset->currentIndex()).toInt() );
 
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
@@ -1163,6 +1186,13 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
+    if (json.contains("animation_f2"))
+        ui->lineEdit_animation_browse2->setText( QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["animation_f2"].get<std::string>().c_str())) );
+    if (json.contains("animation_f3"))
+        ui->lineEdit_animation_browse3->setText( QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["animation_f3"].get<std::string>().c_str())) );
+    if (json.contains("animation_f4"))
+        ui->lineEdit_animation_browse4->setText( QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["animation_f4"].get<std::string>().c_str())) );
+
     if (json.contains("indexed_apply"))
         ui->checkBox_make_indexed->setChecked(json.get<picojson::object>()["indexed_apply"].get<bool>());
     if (json.contains("indexed_diether"))
@@ -1227,6 +1257,27 @@ void MainWindow::LoadProject(const QString &file_name)
             m_oam_vector.push_back(oam);
         }
     }
+
+    if (json.contains("export_nobg"))
+        ui->checkBox_export_nobg->setChecked(true);
+    else
+        ui->checkBox_export_nobg->setChecked(false);
+
+    if (json.contains("export_sprites_offset"))
+    {
+        int offset = (int)(json.get<picojson::object>()["export_sprites_offset"].get<double>());
+        ui->comboBox_export_sprite_offset->blockSignals(true);
+        for (int i = 0; i < ui->comboBox_export_sprite_offset->count(); ++i)
+        {
+            if (ui->comboBox_export_sprite_offset->itemData(i).toInt() == offset)
+            {
+                ui->comboBox_export_sprite_offset->setCurrentIndex(i);
+                break;
+            }
+        }
+        ui->comboBox_export_sprite_offset->blockSignals(false);
+    }
+
 
     ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
     if (ui->checkBox_two_frames_blinking->isChecked())
@@ -2113,3 +2164,36 @@ void MainWindow::on_edit_irq_1_editingFinished()
 {
     RedrawAttributeTab();
 }
+
+void MainWindow::on_btn_animation_browse2_clicked()
+{
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("*.jpg *.png"));
+     if (file_name.isEmpty())
+         return;
+
+     ui->lineEdit_animation_browse2->setText(file_name);
+}
+
+
+void MainWindow::on_btn_animation_browse3_clicked()
+{
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("*.jpg *.png"));
+     if (file_name.isEmpty())
+         return;
+
+     ui->lineEdit_animation_browse3->setText(file_name);
+}
+
+
+void MainWindow::on_btn_animation_browse4_clicked()
+{
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("*.jpg *.png"));
+     if (file_name.isEmpty())
+         return;
+
+     ui->lineEdit_animation_browse4->setText(file_name);
+}
+
+
+
+

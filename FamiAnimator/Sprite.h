@@ -28,6 +28,8 @@ struct SliceArea
     int height;
     QString caption;
     std::vector<OAM> oam;
+    int dx;
+    int dy;
 
     //std::vector<int> chr_export_index;
     //std::map<std::vector<uint8_t>, int> chr_export_map;

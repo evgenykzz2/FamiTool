@@ -34,6 +34,9 @@ public:
     void FullUpdateOamTab();
     void Export_SpriteConvert();
     void Export_Buffer(std::stringstream &stream, const void* data, size_t size);
+
+    void EncodePenguinBlock(const QImage* frame, int block_count, const int* block_x, const int* block_y, const int* block_l,
+                                   std::vector<uint8_t> &chr, std::vector<uint8_t> &nametable);
 protected:
     virtual bool eventFilter(QObject* object, QEvent* event);
 private slots:
@@ -68,6 +71,11 @@ private slots:
     void on_checkBox_two_frames_blinking_clicked();
     void on_edit_irq_0_editingFinished();
     void on_edit_irq_1_editingFinished();
+    void on_btn_animation_browse2_clicked();
+    void on_btn_animation_browse3_clicked();
+    void on_btn_animation_browse4_clicked();
+
+    void on_btn_penguin_export_clicked();
 
 private:
     Ui::MainWindow *ui;

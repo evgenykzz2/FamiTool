@@ -13,6 +13,7 @@ SOURCES += \
     Export.cpp \
     Palette.cpp \
     Sprite.cpp \
+    TabAlign.cpp \
     TabAnimation.cpp \
     dialogPickFamiPalette.cpp \
     dialogpickpalette.cpp \

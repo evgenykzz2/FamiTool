@@ -13,6 +13,7 @@
 static QLabel* s_palette_tab_render;
 static QLabel* s_slice_tab_render;
 static QLabel* s_oam_tab_render;
+static QLabel* s_align_tab_render;
 static const int s_corner_size = 8;
 static const int s_blink_palette_block_size = 24;
 
@@ -67,6 +68,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     on_comboBox_palette_mode_currentIndexChanged(0);
 
+    ui->combo_export_align_chr->addItem("None", QVariant((int)0));
+    ui->combo_export_align_chr->addItem("1KB", QVariant((int)1024));
+    ui->combo_export_align_chr->addItem("2KB", QVariant((int)2048));
+    ui->combo_export_align_chr->addItem("4KB", QVariant((int)4096));
+    ui->combo_export_align_chr->addItem("8KB", QVariant((int)(8*1024)));
+
+    ui->combo_export_offset->addItem("$0000", QVariant((int)0x0000));
+    ui->combo_export_offset->addItem("$0400", QVariant((int)0x0400));
+    ui->combo_export_offset->addItem("$0800", QVariant((int)0x0800));
+    ui->combo_export_offset->addItem("$0C00", QVariant((int)0x0C00));
+    ui->combo_export_offset->addItem("$1000", QVariant((int)0x1000));
+    ui->combo_export_offset->addItem("$1400", QVariant((int)0x1400));
+    ui->combo_export_offset->addItem("$1800", QVariant((int)0x1800));
+    ui->combo_export_offset->addItem("$1C00", QVariant((int)0x1C00));
 
     //-------------------------------------------------------------------------------
     m_palette_tab_zoom = 1;
@@ -99,6 +114,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->scrollArea_OAM->installEventFilter(this);
     m_oam_selected = -1;
 
+
+    AlignTab_Init();
     AnimationTab_Init();
 
     connect(&m_frame_timer, SIGNAL(timeout()), this, SLOT(TimerFrame()));
@@ -445,8 +462,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
             if(key->key() == Qt::Key_Plus)
             {
                 m_slice_tab_zoom ++;
-                if (m_slice_tab_zoom > 4)
-                    m_slice_tab_zoom = 4;
+                if (m_slice_tab_zoom > 16)
+                    m_slice_tab_zoom = 16;
                 else
                     RedrawSliceTab();
             }
@@ -656,6 +673,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     m_slice_end_point.setY(y);
                     m_slice_start_point_active = false;
                     SliceArea area;
+                    area.dx = 0;
+                    area.dy = 0;
                     area.id = QDateTime::currentMSecsSinceEpoch();
                     area.x = m_slice_start_point.x() < m_slice_end_point.x() ? m_slice_start_point.x() : m_slice_end_point.x();
                     area.y = m_slice_start_point.y() < m_slice_end_point.y() ? m_slice_start_point.y() : m_slice_end_point.y();
@@ -677,9 +696,9 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                             break;
                     }
 
-                    ui->comboBox_slice_list->addItem(area.caption, QVariant(area.id));
                     m_slice_vector.push_back(area);
                     m_slice_selected = m_slice_vector.size()-1;
+                    ui->comboBox_slice_list->addItem(area.caption, QVariant(area.id));
                     RedrawSliceTab();
                 } else if (m_slice_selected != -1)
                 {
@@ -710,13 +729,13 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                     return QWidget::eventFilter( object, event );
                 OAM oam;
                 oam.x = x % m_slice_vector[index].width;
-                if (oam.x+8 > m_slice_vector[index].width)
+                if (oam.x > m_slice_vector[index].width)
                     oam.x = m_slice_vector[index].width - 8;
                 oam.y = y;
                 ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
                 int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
-                if (oam.x+sprite_height > m_slice_vector[index].width)
-                    oam.x = m_slice_vector[index].width - sprite_height;
+                //if (oam.y+sprite_height > m_slice_vector[index].)
+                //    oam.y = m_slice_vector[index].width - sprite_height;
                 oam.palette = 0;
                 if (ui->radioButton_oam_pal1->isChecked())
                     oam.palette = 1;
@@ -725,6 +744,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 else if (ui->radioButton_oam_pal3->isChecked())
                     oam.palette = 3;
                 oam.mode = ui->checkBox_oam_fill_any_color->isChecked() ? 1 : 0;
+                qDebug() << "Create" << oam.x << oam.y;
                 m_slice_vector[index].oam.push_back(oam);
                 RedrawOamTab();
             }
@@ -740,6 +760,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 m_oam_selected = -1;
                 int sx = x % m_slice_vector[index].width;
                 int px = x / m_slice_vector[index].width;
+                qDebug() << "Press at" << sx << y;
                 for (size_t n = 0; n < m_slice_vector[index].oam.size(); ++n)
                 {
                     if (x >= m_slice_vector[index].oam[n].x && x < m_slice_vector[index].oam[n].x+8 &&
@@ -802,6 +823,8 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
     }
     if (ui->tabWidget->currentWidget() == ui->tab_Animation)
         AnimationTab_EventFilter(object, event);
+    if (ui->tabWidget->currentWidget() == ui->tab_align)
+        AlignTab_EventFilter(object, event);
     return QWidget::eventFilter( object, event );
 }
 
@@ -855,7 +878,7 @@ void MainWindow::on_pushButton_clear_colormapping_clicked()
 
 void MainWindow::on_pushButton_sprite_browse_clicked()
 {
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), QDir::currentPath(), tr("*.jpg *.png"));
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("*.jpg *.png"));
      if (file_name.isEmpty())
          return;
 
@@ -896,7 +919,7 @@ void MainWindow::on_actionExit_triggered()
 
 void MainWindow::on_actionOpen_triggered()
 {
-    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), QDir::currentPath(), "*.famiani");
+    QString file_name = QFileDialog::getOpenFileName(this, tr("Open project file"), "", "*.famiani");
      if (file_name.isEmpty())
          return;
     m_project_file_name = file_name;
@@ -913,7 +936,7 @@ void MainWindow::on_actionSave_triggered()
 
 void MainWindow::on_actionSave_as_triggered()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", QDir::currentPath(), "*.famiani");
+    QString file_name = QFileDialog::getSaveFileName(this, "Save project file", "", "*.famiani");
     if (file_name.isEmpty())
         return;
     if (file_name.right(8) != ".famiani")
@@ -953,7 +976,11 @@ void MainWindow::SaveProject(const QString &file_name)
 
     json.get<picojson::object>()["sprite_set"] = picojson::value( m_spriteset_file_name.toUtf8().toBase64().data() );
 
-    json.get<picojson::object>()["palette_blink"] = picojson::value( ui->checkBox_palette_blink->isChecked() ? 1.0 : 0.0 );
+    json.get<picojson::object>()["export_align"] = picojson::value( (double)ui->combo_export_align_chr->itemData(ui->combo_export_align_chr->currentIndex()).toInt());
+    json.get<picojson::object>()["export_offset"] = picojson::value( (double)ui->combo_export_offset->itemData(ui->combo_export_offset->currentIndex()).toInt());
+
+    if (ui->checkBox_palette_blink->isChecked())
+        json.get<picojson::object>()["palette_blink"] = picojson::value(1.0);
 
     picojson::array items = picojson::array();
     for (auto itt = m_palette_cvt_rule.begin(); itt != m_palette_cvt_rule.end(); ++itt)
@@ -978,6 +1005,10 @@ void MainWindow::SaveProject(const QString &file_name)
             item_obj["w"] = picojson::value( (double)m_slice_vector[n].width );
             item_obj["h"] = picojson::value( (double)m_slice_vector[n].height );
             item_obj["cap"] = picojson::value( m_slice_vector[n].caption.toUtf8().toBase64().data() );
+            if (m_slice_vector[n].dx != 0)
+                item_obj["dx"] = picojson::value( (double)m_slice_vector[n].dx );
+            if (m_slice_vector[n].dy != 0)
+                item_obj["dy"] = picojson::value( (double)m_slice_vector[n].dy );
             if (!m_slice_vector[n].oam.empty())
             {
                 picojson::array oams = picojson::array();
@@ -1117,7 +1148,9 @@ void MainWindow::LoadProject(const QString &file_name)
         m_bg_color_index = json.get<picojson::object>()["background_color"].get<double>();
 
     if (json.contains("palette_blink"))
-         ui->checkBox_palette_blink->setChecked(json.get<picojson::object>()["background_color"].get<double>());
+         ui->checkBox_palette_blink->setChecked(true);
+    else
+         ui->checkBox_palette_blink->setChecked(false);
     ui->widget_blink_palette->setVisible(ui->checkBox_palette_blink->isChecked());
 
     if (ui->checkBox_palette_blink->isChecked())
@@ -1174,6 +1207,33 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
+
+    if (json.contains("export_align"))
+    {
+        int v = json.get<picojson::object>()["export_align"].get<double>();
+        for (int i = 0; i < ui->combo_export_align_chr->count(); ++i)
+        {
+            if (ui->combo_export_align_chr->itemData(i).toInt() == v)
+            {
+                ui->combo_export_align_chr->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
+    if (json.contains("export_offset"))
+    {
+        int v = json.get<picojson::object>()["export_offset"].get<double>();
+        for (int i = 0; i < ui->combo_export_align_chr->count(); ++i)
+        {
+            if (ui->combo_export_offset->itemData(i).toInt() == v)
+            {
+                ui->combo_export_offset->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+
     m_slice_vector.clear();
     if (json.contains("slice_area"))
     {
@@ -1187,6 +1247,15 @@ void MainWindow::LoadProject(const QString &file_name)
             area.width = (int)(itt->get<picojson::object>()["w"].get<double>());
             area.height = (int)(itt->get<picojson::object>()["h"].get<double>());
             area.caption = QString::fromUtf8( QByteArray::fromBase64(itt->get<picojson::object>()["cap"].get<std::string>().c_str()));
+            if (itt->contains("dx"))
+                area.dx = (int)(itt->get<picojson::object>()["dx"].get<double>());
+            else
+                area.dx = 0;
+
+            if (itt->contains("dy"))
+                area.dy = (int)(itt->get<picojson::object>()["dy"].get<double>());
+            else
+                area.dy = 0;
 
             if (itt->contains("oam"))
             {
@@ -1261,6 +1330,7 @@ void MainWindow::LoadProject(const QString &file_name)
     RedrawSliceTab();
     FullUpdateOamTab();
     AnimationTab_Reload();
+    AlignTab_Reload();
 }
 
 void MainWindow::RedrawSliceTab()
@@ -1292,6 +1362,16 @@ void MainWindow::RedrawSliceTab()
                              (m_slice_end_point.y() - m_slice_start_point.y())*m_slice_tab_zoom
                              );
         }
+
+        if (ui->checkBox_slice_draw_grid->isChecked())
+        {
+            painter.setPen(QColor(0xFF20AA00));
+            for (int y = 0; y < image.height(); y += 16*m_slice_tab_zoom)
+                painter.drawLine(0, y, image.width()-1, y);
+            for (int x = 0; x < image.width(); x += 16*m_slice_tab_zoom)
+                painter.drawLine(x, 0, x, image.height()-1);
+        }
+
         static const int fs = 12;
         painter.setFont(QFont("Arial", fs));
         for (size_t n = 0; n < m_slice_vector.size(); ++n)
@@ -1356,6 +1436,10 @@ void MainWindow::on_tabWidget_currentChanged(int)
     {
         AnimationTab_Reload();
     }
+    if (ui->tabWidget->currentWidget() == ui->tab_align)
+    {
+        AnimationTab_Reload();
+    }
 }
 
 
@@ -1385,6 +1469,7 @@ void MainWindow::on_lineEdit_slice_name_editingFinished()
     } else
     {
         m_slice_vector[m_slice_selected].caption = text;
+        ui->comboBox_slice_list->setItemText(ui->comboBox_slice_list->currentIndex(), text);
     }
 }
 
@@ -1659,4 +1744,16 @@ void MainWindow::on_checkBox_palette_blink_clicked()
     if (ui->checkBox_palette_blink->isChecked())
         UpdateBlinkPalette();
 }
+
+
+void MainWindow::on_checkBox_slice_draw_grid_clicked()
+{
+    RedrawSliceTab();
+}
+
+
+
+
+
+
 

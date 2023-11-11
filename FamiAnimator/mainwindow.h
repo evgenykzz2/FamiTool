@@ -39,6 +39,11 @@ public:
     void AnimationTab_FrameTick();
     void AnimationTab_EventFilter(QObject* object, QEvent* event);
 
+    void AlignTab_Init();
+    void AlignTab_Reload();
+    void AlignTab_Redraw();
+    void AlignTab_EventFilter(QObject* object, QEvent* event);
+
     void RedrawSliceTab();
     void RedrawOamTab();
     void FullUpdateOamTab();
@@ -93,6 +98,16 @@ private slots:
     void on_check_draw_dbox_clicked();
 
     void on_checkBox_palette_blink_clicked();
+
+    void on_checkBox_slice_draw_grid_clicked();
+
+    void on_comboBox_align_slice_currentIndexChanged(int index);
+
+    void on_edit_align_dx_editingFinished();
+
+    void on_edit_align_dy_editingFinished();
+
+    void on_btn_export_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -11,6 +11,7 @@ CONFIG += c++17
 SOURCES += \
     Export.cpp \
     Palette.cpp \
+    PenguinExport.cpp \
     Sprite.cpp \
     dialogPickFamiPalette.cpp \
     dialogpickpalette.cpp \

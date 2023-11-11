@@ -323,7 +323,7 @@ void MainWindow::BlockWnd_RedrawBlock()
         ui->widget_block_param->setVisible(false);
         return;
     }
-    //ui->comboBox_block_set_palette->setCurrentIndex(block_itt->second.palette);
+    ui->comboBox_block_set_palette->setCurrentIndex(block_itt->second.palette);
 
     if (block_itt->second.overlay != ui->lineEdit_block_overlay->text())
         ui->lineEdit_block_overlay->setText(block_itt->second.overlay);

@@ -4,6 +4,7 @@
 #include <memory.h>
 #include <iomanip>
 #include <QFile>
+#include <QFileDialog>
 
 void MainWindow::Export_SpriteConvert()
 {
@@ -260,6 +261,166 @@ void MainWindow::on_pushButton_export_test_clicked()
         }
     }
 }
+
+
+void MainWindow::on_btn_export_clicked()
+{
+    if (m_spriteset_original.isNull())
+        return;
+    Image2Index(m_spriteset_original, m_spriteset_index);
+    Index2Image(m_spriteset_index, m_spriteset_indexed, m_spriteset_original.width(), m_spriteset_original.height());
+    Export_SpriteConvert();
+
+    ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
+    //int sprite_height = sprite_mode == SpriteMode_8x8 ? 8 : 16;
+    //bool blink = ui->checkBox_palette_blink->isChecked();
+
+    int oam_offset = ui->combo_export_offset->itemData(ui->combo_export_offset->currentIndex()).toInt();
+
+    std::stringstream stream;
+    std::vector<uint8_t> chrset;
+    std::map<std::vector<uint8_t>, int> chr_map;
+    for (size_t slice = 0; slice < m_slice_vector.size(); ++slice)
+    {
+        if (m_slice_vector[slice].oam.empty())
+            continue;
+
+        stream << m_slice_vector[slice].caption.toStdString() << ":" << std::endl;
+        stream << "    .db " << m_slice_vector[slice].oam.size() << std::endl;
+
+        for (size_t i = 0; i < m_slice_vector[slice].oam.size(); ++i)
+        {
+            std::vector<uint8_t> bin = m_slice_vector[slice].oam[i].chr_export;
+            std::vector<uint8_t> bin_v(bin.size());
+            if (sprite_mode == SpriteMode_8x8)
+            {
+                for (size_t n = 0; n < 8; ++n)
+                {
+                    bin_v[n]   = bin[7-n];
+                    bin_v[8+n] = bin[8+7-n];
+                }
+            } else
+            {
+                for (size_t n = 0; n < 8; ++n)
+                {
+                    bin_v[n]   = bin[16+7-n];
+                    bin_v[8+n] = bin[16+8+7-n];
+                    bin_v[16+n]   = bin[7-n];
+                    bin_v[16+8+n] = bin[8+7-n];
+                }
+            }
+
+            std::vector<uint8_t> bin_h(bin.size(), 0);
+            std::vector<uint8_t> bin_hv(bin.size(), 0);
+            for (size_t n = 0; n < bin.size(); ++n)
+            {
+                for (size_t b = 0; b < 8; ++b)
+                {
+                    if ((uint8_t)(bin[n] & (1 << b)) != 0)
+                        bin_h[n] |= 0x80 >> b;
+                    if ((uint8_t)(bin_v[n] & (1 << b)) != 0)
+                        bin_hv[n] |= 0x80 >> b;
+                }
+            }
+
+
+            int index = -1;
+            uint8_t flag = 0;
+            auto itt = chr_map.find(bin);
+            if (itt != chr_map.end())
+                index = itt->second;
+            else
+            {
+                itt = chr_map.find(bin_h);
+                if (itt != chr_map.end())
+                {
+                    index = itt->second;
+                    flag |= 0x40;
+                } else
+                {
+                    itt = chr_map.find(bin_v);
+                    if (itt != chr_map.end())
+                    {
+                        index = itt->second;
+                        flag |= 0x80;
+                    } else
+                    {
+                        itt = chr_map.find(bin_hv);
+                        if (itt != chr_map.end())
+                        {
+                            index = itt->second;
+                            flag |= 0x80 | 0x40;
+                        } else
+                        {
+                            index = chr_map.size();
+                            chr_map.insert(std::make_pair(bin, index));
+                            chrset.insert(chrset.end(), bin.begin(), bin.end());
+                        }
+                    }
+                }
+            }
+
+            if (sprite_mode == SpriteMode_8x8)
+            {
+                index = (index + (oam_offset >> 4)) & 0xFF;
+            } else if (sprite_mode == SpriteMode_8x16)
+            {
+                index *= 2;
+                index = (index + (oam_offset >> 4)) & 0xFF;
+                if (oam_offset >= 0x1000)
+                    index += 1;
+            }
+            stream << "    .db ";
+            stream << "$" << std::hex << std::setw(2) << std::setfill('0') << (((uint32_t)m_slice_vector[slice].oam[i].y + m_slice_vector[slice].dy) & 0xFF) << ", ";
+            stream << "$" << std::hex << std::setw(2) << std::setfill('0') << (((uint32_t)index) & 0xFF) << ", ";
+            stream << "$" << std::hex << std::setw(2) << std::setfill('0') << (((uint32_t)flag) & 0xFF) << ", ";
+            stream << "$" << std::hex << std::setw(2) << std::setfill('0') << (((uint32_t)m_slice_vector[slice].oam[i].x + m_slice_vector[slice].dx) & 0xFF) << std::endl;
+        }
+        stream << std::endl;
+    }
+
+
+    int align_size = ui->combo_export_align_chr->itemData(ui->combo_export_align_chr->currentIndex()).toInt();
+    chrset.resize((chrset.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+
+
+    {
+        QString file_name = QFileDialog::getSaveFileName(this, "Asm include file", "", "*.inc");
+        if (file_name.isEmpty())
+            return;
+
+        QFile file(file_name);
+        file.open(QFile::WriteOnly);
+        file.write(stream.str().c_str(), stream.str().length());
+        file.close();
+    }
+
+    {
+        QString file_name = QFileDialog::getSaveFileName(this, "Character binary file", "", "*.chr");
+        if (file_name.isEmpty())
+            return;
+
+        QFile file(file_name);
+        file.open(QFile::WriteOnly);
+        file.write((const char*)chrset.data(), chrset.size());
+        file.close();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

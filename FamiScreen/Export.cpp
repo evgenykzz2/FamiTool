@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include <string.h>
 #include <memory.h>
+#include <map>
 #include <iomanip>
 #include <QFile>
 #include <QFileDialog>
@@ -186,7 +187,7 @@ static void PrintBuffer(std::stringstream &stream, std::vector<uint8_t>& buffer)
 
 void MainWindow::on_pushButton_export_clicked()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Asm include file", QDir::currentPath(), "*.inc");
+    QString file_name = QFileDialog::getSaveFileName(this, "Asm include file", "", "*.inc");
     if (file_name.isEmpty())
         return;
 
@@ -303,22 +304,111 @@ void MainWindow::on_pushButton_export_clicked()
     std::vector<uint8_t> oam_raw;
     std::vector<uint8_t> oam_chr;
     std::vector<uint8_t> oam_chr_blink;
+    std::map<std::vector<uint8_t>, int> oam_map;
+
+    int sprite_base = ui->comboBox_export_sprite_offset->itemData(ui->comboBox_export_sprite_offset->currentIndex()).toInt();
+
     if (!m_oam_vector.empty())
     {
         for (size_t n = 0; n < m_oam_vector.size(); ++n)
         {
-            oam_raw.push_back(m_oam_vector[n].y);   //Y
-            if (sprite_mode == SpriteMode_8x8)
-                oam_raw.push_back(n); //Index
-            else
-                oam_raw.push_back(n*2); //Index
-            oam_raw.push_back(m_oam_vector[n].palette);   //flags (VHp000PP) p=priority(0=front, 1=back)
-            oam_raw.push_back(m_oam_vector[n].x);   //X
-
-            //qDebug() << m_oam_vector[n].chr_export.size();
-            oam_chr.insert(oam_chr.end(), m_oam_vector[n].chr_export.begin(), m_oam_vector[n].chr_export.end());
+            std::vector<uint8_t> bin = m_oam_vector[n].chr_export;
             if (ui->checkBox_two_frames_blinking->isChecked())
-                oam_chr_blink.insert(oam_chr_blink.end(), m_oam_vector[n].chr_export_blink.begin(), m_oam_vector[n].chr_export_blink.end());
+                bin.insert(bin.end(), m_oam_vector[n].chr_export_blink.begin(), m_oam_vector[n].chr_export_blink.end());
+
+            std::vector<uint8_t> bin_v(bin.size());
+            if (sprite_mode == SpriteMode_8x8)
+            {
+                for (size_t n = 0; n < 8; ++n)
+                {
+                    bin_v[n]   = bin[7-n];
+                    bin_v[8+n] = bin[8+7-n];
+                    if (ui->checkBox_two_frames_blinking->isChecked())
+                    {
+                        bin_v[16+n] = bin[16+7-n];
+                        bin_v[16+8+n] = bin[16+8+7-n];
+                    }
+                }
+            } else
+            {
+                for (size_t n = 0; n < 8; ++n)
+                {
+                    bin_v[n]   = bin[16+7-n];
+                    bin_v[8+n] = bin[16+8+7-n];
+                    bin_v[16+n]   = bin[7-n];
+                    bin_v[16+8+n] = bin[8+7-n];
+                    if (ui->checkBox_two_frames_blinking->isChecked())
+                    {
+                        bin_v[32+n] = bin[32+16+7-n];
+                        bin_v[32+8+n] = bin[32+16+8+7-n];
+                        bin_v[32+16+n]   = bin[32+7-n];
+                        bin_v[32+16+8+n] = bin[32+8+7-n];
+                    }
+                }
+            }
+
+            std::vector<uint8_t> bin_h(bin.size(), 0);
+            std::vector<uint8_t> bin_hv(bin.size(), 0);
+            for (size_t n = 0; n < bin.size(); ++n)
+            {
+                for (size_t b = 0; b < 8; ++b)
+                {
+                    if ((uint8_t)(bin[n] & (1 << b)) != 0)
+                        bin_h[n] |= 0x80 >> b;
+                    if ((uint8_t)(bin_v[n] & (1 << b)) != 0)
+                        bin_hv[n] |= 0x80 >> b;
+                }
+            }
+
+            int index;
+            uint8_t flag = 0;
+            auto itt = oam_map.find(bin);
+            if (itt != oam_map.end())
+                index = itt->second;
+            else
+            {
+                auto itt = oam_map.find(bin_h);
+                if (itt != oam_map.end())
+                {
+                    index = itt->second;
+                    flag |= 0x40;
+                } else
+                {
+                    auto itt = oam_map.find(bin_v);
+                    if (itt != oam_map.end())
+                    {
+                        index = itt->second;
+                        flag |= 0x80;
+                    } else
+                    {
+                        auto itt = oam_map.find(bin_hv);
+                        if (itt != oam_map.end())
+                        {
+                            index = itt->second;
+                            flag |= 0x80 | 0x40;
+                        } else
+                        {
+                            index = oam_map.size();
+                            oam_chr.insert(oam_chr.end(), bin.begin(), bin.end());
+                            oam_map.insert(std::make_pair(bin, index));
+                        }
+                    }
+                }
+            }
+
+            oam_raw.push_back(m_oam_vector[n].y-1);     //Y
+            if (sprite_mode == SpriteMode_8x8)
+                oam_raw.push_back(index + (sprite_base & 0xFF));      //Index
+            else
+            {
+                index = index*2 + (sprite_base & 0xFF);
+                if (sprite_base >= 0x100)
+                    index ++;
+                //index ++;  //Index +1 for upper bank
+                oam_raw.push_back(index);
+            }
+            oam_raw.push_back(m_oam_vector[n].palette | flag); //flags (VHp000PP) p=priority(0=front, 1=back)
+            oam_raw.push_back(m_oam_vector[n].x);       //X
         }
     }
 
@@ -342,8 +432,11 @@ void MainWindow::on_pushButton_export_clicked()
 
     {
         std::stringstream stream;
-        stream << ui->lineEdit_name->text().toStdString() << ":  ;" << std::dec << nametable.size() << " bytes" << std::endl;
-        PrintBuffer(stream, nametable);
+        if (ui->checkBox_export_nobg->isChecked() == false)
+        {
+            stream << ui->lineEdit_name->text().toStdString() << "_nt:  ;" << std::dec << nametable.size() << " bytes" << std::endl;
+            PrintBuffer(stream, nametable);
+        }
 
         if (!oam_raw.empty())
         {
@@ -362,7 +455,7 @@ void MainWindow::on_pushButton_export_clicked()
         file.close();
     }
 
-    QString chr_file_name = QFileDialog::getSaveFileName(this, "Character binary file", QDir::currentPath(), "*.chr");
+    QString chr_file_name = QFileDialog::getSaveFileName(this, "Character binary file", "", "*.chr");
     if (chr_file_name.isEmpty())
         return;
 
@@ -397,12 +490,15 @@ void MainWindow::on_pushButton_export_clicked()
     {
         QFile file(chr_file_name);
         file.open(QFile::WriteOnly);
-        for (size_t i = 0; i < 4; ++i)
+        if (ui->checkBox_export_nobg->isChecked() == false)
         {
-            if (tile_vector[i].size() != 0)
-                file.write((const char*)tile_vector[i].data(), tile_vector[i].size());
-            if (ui->checkBox_two_frames_blinking->isChecked() && tile_vector_blink[i].size() != 0)
-                file.write((const char*)tile_vector_blink[i].data(), tile_vector_blink[i].size());
+            for (size_t i = 0; i < 4; ++i)
+            {
+                if (tile_vector[i].size() != 0)
+                    file.write((const char*)tile_vector[i].data(), tile_vector[i].size());
+                if (ui->checkBox_two_frames_blinking->isChecked() && tile_vector_blink[i].size() != 0)
+                    file.write((const char*)tile_vector_blink[i].data(), tile_vector_blink[i].size());
+            }
         }
 
         if (!oam_chr.empty())

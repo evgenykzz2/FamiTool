@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>993</width>
-    <height>639</height>
+    <width>792</width>
+    <height>574</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>5</number>
       </property>
       <widget class="QWidget" name="tab_general">
        <attribute name="title">
@@ -1122,8 +1122,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>556</width>
+             <height>464</height>
             </rect>
            </property>
           </widget>
@@ -1297,8 +1297,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>556</width>
+             <height>464</height>
             </rect>
            </property>
           </widget>
@@ -1402,8 +1402,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>707</width>
-             <height>529</height>
+             <width>556</width>
+             <height>464</height>
             </rect>
            </property>
           </widget>
@@ -1569,6 +1569,103 @@
        <attribute name="title">
         <string>Animation</string>
        </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_7">
+        <item>
+         <layout class="QGridLayout" name="gridLayout_4">
+          <item row="0" column="0">
+           <widget class="QCheckBox" name="checkBox_animation_frame2">
+            <property name="text">
+             <string>Frame 2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="lineEdit_animation_browse3"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QCheckBox" name="checkBox_animation_frame3">
+            <property name="text">
+             <string>Frame 3</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QPushButton" name="btn_animation_browse3">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QPushButton" name="btn_animation_browse2">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QPushButton" name="btn_animation_browse4">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="lineEdit_animation_browse4"/>
+          </item>
+          <item row="2" column="0">
+           <widget class="QCheckBox" name="checkBox_animation_frame3_2">
+            <property name="text">
+             <string>Frame 4</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="lineEdit_animation_browse2"/>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_6">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>387</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_16">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="btn_penguin_export">
+            <property name="text">
+             <string>Penguin Export</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_11">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
       </widget>
       <widget class="QWidget" name="tab_export">
        <attribute name="title">
@@ -1580,6 +1677,16 @@
           <property name="bottomMargin">
            <number>0</number>
           </property>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="comboBox_chr_align">
+            <property name="minimumSize">
+             <size>
+              <width>164</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+          </item>
           <item row="0" column="1">
            <widget class="QComboBox" name="comboBox_compression">
             <property name="minimumSize">
@@ -1594,6 +1701,13 @@
            <widget class="QLabel" name="label_9">
             <property name="text">
              <string>Compression</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QCheckBox" name="checkBox_export_nobg">
+            <property name="text">
+             <string>No background export</string>
             </property>
            </widget>
           </item>
@@ -1617,15 +1731,15 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="1">
-           <widget class="QComboBox" name="comboBox_chr_align">
-            <property name="minimumSize">
-             <size>
-              <width>164</width>
-              <height>0</height>
-             </size>
+          <item row="3" column="0">
+           <widget class="QLabel" name="label_18">
+            <property name="text">
+             <string>Sprites offset</string>
             </property>
            </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QComboBox" name="comboBox_export_sprite_offset"/>
           </item>
          </layout>
         </item>
@@ -1677,7 +1791,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>993</width>
+     <width>792</width>
      <height>22</height>
     </rect>
    </property>
