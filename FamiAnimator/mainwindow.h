@@ -109,6 +109,8 @@ private slots:
 
     void on_btn_export_clicked();
 
+    void on_checkBox_oam_foreground_clicked();
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;

@@ -196,6 +196,7 @@ void MainWindow::on_pushButton_export_clicked()
 
     ECompression compresion = (ECompression)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt();
     EChrAlign align = (EChrAlign)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt();
+    int tiles_offset = ui->lineEdit_export_tiles_offset->text().toInt();
 
     ESpriteMode sprite_mode = (ESpriteMode)ui->comboBox_sprite_mode->itemData(ui->comboBox_sprite_mode->currentIndex()).toInt();
 
@@ -281,9 +282,9 @@ void MainWindow::on_pushButton_export_clicked()
                     tile_vector_blink[slot].insert(tile_vector_blink[slot].end(), tile.begin()+16, tile.begin()+32);
                 } else
                     tile_vector[slot].insert(tile_vector[slot].end(), tile.begin(), tile.end());
-                nametable[n] = index;
+                nametable[n] = index == 0 ? 0 : index + tiles_offset;
             } else
-                nametable[n] = itt->second;
+                nametable[n] = itt->second == 0 ? 0 : itt->second + tiles_offset;
 
             uint8_t attr = m_screen_attribute[(y/2)*16 + (x/2)];
             if ((x/2) % 2 == 1)

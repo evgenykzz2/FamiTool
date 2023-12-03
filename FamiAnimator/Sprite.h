@@ -15,6 +15,7 @@ struct OAM
     int y;
     int palette;
     int mode;
+    bool behind_background;
     std::vector<uint8_t> chr_export;  //Raw chr, can duplicate chr
     std::vector<uint8_t> chr_export_blink;
 };

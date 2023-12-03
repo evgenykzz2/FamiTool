@@ -21,15 +21,17 @@ void MainWindow::Export_SpriteConvert()
             int pindex = m_slice_vector[index].oam[n].palette;
             Palette pal = m_palette_set[pindex];
             m_slice_vector[index].oam[n].chr_export.resize(sprite_height*2);
+            memset(m_slice_vector[index].oam[n].chr_export.data(), 0, m_slice_vector[index].oam[n].chr_export.size());
             uint8_t* chr_cvt = m_slice_vector[index].oam[n].chr_export.data();
             memset(chr_cvt, 0, sprite_height*2);
             m_slice_vector[index].oam[n].chr_export_blink.resize(sprite_height*2);
+            memset(m_slice_vector[index].oam[n].chr_export_blink.data(), 0, m_slice_vector[index].oam[n].chr_export_blink.size());
             uint8_t* chr_blink_cvt = m_slice_vector[index].oam[n].chr_export_blink.data();
             memset(chr_blink_cvt, 0, sprite_height*2);
             for (int y = 0; y < sprite_height; ++y)
             {
                 int yline = y + m_slice_vector[index].oam[n].y;
-                if (yline < 0 || yline > cut.height())
+                if (yline < 0 || yline >= cut.height())
                     continue;
                 const uint32_t* scan_line = (const uint32_t*)cut.scanLine(yline);
                 uint8_t* bit0 = y < 8 ? chr_cvt+y : chr_cvt+8+y;
@@ -40,7 +42,7 @@ void MainWindow::Export_SpriteConvert()
                 for (int x = 0; x < 8; ++x)
                 {
                     int xp = x + m_slice_vector[index].oam[n].x;
-                    if (xp < 0 || xp > cut.width() || scan_line[xp] == m_bg_color)
+                    if (xp < 0 || xp >= cut.width() || scan_line[xp] == m_bg_color)
                     {
                         mask >>=1;
                         continue;
@@ -286,7 +288,7 @@ void MainWindow::on_btn_export_clicked()
             continue;
 
         stream << m_slice_vector[slice].caption.toStdString() << ":" << std::endl;
-        stream << "    .db " << m_slice_vector[slice].oam.size() << std::endl;
+        stream << "    .db " << std::dec << m_slice_vector[slice].oam.size() << std::endl;
 
         for (size_t i = 0; i < m_slice_vector[slice].oam.size(); ++i)
         {
@@ -359,6 +361,10 @@ void MainWindow::on_btn_export_clicked()
                     }
                 }
             }
+
+            flag |= m_slice_vector[slice].oam[i].palette;
+            if (m_slice_vector[slice].oam[i].behind_background)
+                flag |= 0x20;
 
             if (sprite_mode == SpriteMode_8x8)
             {

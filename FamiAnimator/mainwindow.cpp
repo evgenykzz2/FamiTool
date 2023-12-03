@@ -744,6 +744,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 else if (ui->radioButton_oam_pal3->isChecked())
                     oam.palette = 3;
                 oam.mode = ui->checkBox_oam_fill_any_color->isChecked() ? 1 : 0;
+                oam.behind_background = ui->checkBox_oam_foreground->isChecked();
                 qDebug() << "Create" << oam.x << oam.y;
                 m_slice_vector[index].oam.push_back(oam);
                 RedrawOamTab();
@@ -780,6 +781,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                 if (m_oam_selected >= 0)
                 {
                     ui->checkBox_oam_fill_any_color->setChecked(m_slice_vector[index].oam[m_oam_selected].mode);
+                    ui->checkBox_oam_foreground->setChecked(m_slice_vector[index].oam[m_oam_selected].behind_background);
                     ui->radioButton_oam_pal0->setChecked(m_slice_vector[index].oam[m_oam_selected].palette == 0);
                     ui->radioButton_oam_pal1->setChecked(m_slice_vector[index].oam[m_oam_selected].palette == 1);
                     ui->radioButton_oam_pal2->setChecked(m_slice_vector[index].oam[m_oam_selected].palette == 2);
@@ -1019,6 +1021,8 @@ void MainWindow::SaveProject(const QString &file_name)
                     oam_obj["y"] = picojson::value( (double)m_slice_vector[n].oam[i].y );
                     oam_obj["p"] = picojson::value( (double)m_slice_vector[n].oam[i].palette );
                     oam_obj["m"] = picojson::value( (double)m_slice_vector[n].oam[i].mode);
+                    if (m_slice_vector[n].oam[i].behind_background)
+                        oam_obj["bh"] = picojson::value(1.0);
                     oams.push_back(picojson::value(oam_obj));
                 }
                 item_obj["oam"] = picojson::value(oams);
@@ -1224,7 +1228,7 @@ void MainWindow::LoadProject(const QString &file_name)
     if (json.contains("export_offset"))
     {
         int v = json.get<picojson::object>()["export_offset"].get<double>();
-        for (int i = 0; i < ui->combo_export_align_chr->count(); ++i)
+        for (int i = 0; i < ui->combo_export_offset->count(); ++i)
         {
             if (ui->combo_export_offset->itemData(i).toInt() == v)
             {
@@ -1267,6 +1271,10 @@ void MainWindow::LoadProject(const QString &file_name)
                     oam.y = (int)(oam_itt->get<picojson::object>()["y"].get<double>());
                     oam.palette = (int)(oam_itt->get<picojson::object>()["p"].get<double>());
                     oam.mode = (int)(oam_itt->get<picojson::object>()["m"].get<double>());
+                    if (oam_itt->contains("bh"))
+                        oam.behind_background = true;
+                    else
+                        oam.behind_background = false;
                     area.oam.push_back(oam);
                 }
             }
@@ -1438,7 +1446,7 @@ void MainWindow::on_tabWidget_currentChanged(int)
     }
     if (ui->tabWidget->currentWidget() == ui->tab_align)
     {
-        AnimationTab_Reload();
+        AlignTab_Reload();
     }
 }
 
@@ -1531,7 +1539,7 @@ void MainWindow::RedrawOamTab()
             for (int x = 0; x < 8; ++x)
             {
                 int xp = x + m_slice_vector[index].oam[n].x;
-                if (xp < 0 || xp > cut.width())
+                if (xp < 0 || xp >= cut.width())
                     continue;
                 if (scan_line[xp] == m_bg_color)
                     continue;
@@ -1706,6 +1714,15 @@ void MainWindow::on_checkBox_oam_fill_any_color_clicked()
     RedrawOamTab();
 }
 
+void MainWindow::on_checkBox_oam_foreground_clicked()
+{
+    size_t index = ui->comboBox_oam_slice->currentIndex();
+    if (index >= m_slice_vector.size())
+        return;
+    if (m_oam_selected < 0)
+        return;
+    m_slice_vector[index].oam[m_oam_selected].behind_background = ui->checkBox_oam_foreground->isChecked();
+}
 
 void MainWindow::on_pushButton_slice_add_clicked()
 {
@@ -1750,10 +1767,6 @@ void MainWindow::on_checkBox_slice_draw_grid_clicked()
 {
     RedrawSliceTab();
 }
-
-
-
-
 
 
 

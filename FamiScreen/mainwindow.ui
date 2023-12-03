@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>5</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_general">
        <attribute name="title">
@@ -1317,6 +1317,20 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="checkBox_attribute_draw_index">
+            <property name="text">
+             <string>Draw index</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBox_attribute_custom_index">
+            <property name="text">
+             <string>Custom index</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QLabel" name="label_attribute_tiles">
             <property name="font">
              <font>
@@ -1549,6 +1563,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QPushButton" name="btn_oam_clear_color_mapping">
+            <property name="text">
+             <string>Clear Color Mapping</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="verticalSpacer_4">
             <property name="orientation">
              <enum>Qt::Vertical</enum>
@@ -1677,16 +1698,6 @@
           <property name="bottomMargin">
            <number>0</number>
           </property>
-          <item row="1" column="1">
-           <widget class="QComboBox" name="comboBox_chr_align">
-            <property name="minimumSize">
-             <size>
-              <width>164</width>
-              <height>0</height>
-             </size>
-            </property>
-           </widget>
-          </item>
           <item row="0" column="1">
            <widget class="QComboBox" name="comboBox_compression">
             <property name="minimumSize">
@@ -1704,26 +1715,6 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
-           <widget class="QCheckBox" name="checkBox_export_nobg">
-            <property name="text">
-             <string>No background export</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="2">
-           <spacer name="horizontalSpacer_9">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_11">
             <property name="text">
@@ -1740,6 +1731,56 @@
           </item>
           <item row="3" column="1">
            <widget class="QComboBox" name="comboBox_export_sprite_offset"/>
+          </item>
+          <item row="0" column="2">
+           <spacer name="horizontalSpacer_9">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="comboBox_chr_align">
+            <property name="minimumSize">
+             <size>
+              <width>164</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QCheckBox" name="checkBox_export_nobg">
+            <property name="text">
+             <string>No background export</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="label_19">
+            <property name="text">
+             <string>Tiles offset</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QLineEdit" name="lineEdit_export_tiles_offset">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>0</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>

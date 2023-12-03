@@ -77,6 +77,12 @@ private slots:
 
     void on_btn_penguin_export_clicked();
 
+    void on_btn_oam_clear_color_mapping_clicked();
+
+    void on_checkBox_attribute_draw_index_stateChanged(int arg1);
+
+    void on_checkBox_attribute_custom_index_stateChanged(int arg1);
+
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
@@ -106,6 +112,8 @@ private:
     std::vector<uint8_t> m_screen_tiles;     //16 bytes per 8x8
     std::vector<uint8_t> m_screen_tiles_blink;     //alternate blink tile
     int    m_attribute_tab_zoom;
+
+    std::map<std::pair<int, int>, int> m_attribute_custom_map;
 
     int    m_oam_tab_zoom;
     QString m_oam_slice_last;

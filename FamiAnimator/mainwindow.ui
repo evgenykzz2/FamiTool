@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>6</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_general">
        <attribute name="title">
@@ -1052,6 +1052,13 @@
            <widget class="QCheckBox" name="checkBox_oam_fill_any_color">
             <property name="text">
              <string>Fill any color</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBox_oam_foreground">
+            <property name="text">
+             <string>Behind background</string>
             </property>
            </widget>
           </item>

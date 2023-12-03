@@ -683,9 +683,26 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
             }
         }
     }
+
     if (object == s_attribute_tab_render)
     {
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            QMouseEvent* mouse_event = (QMouseEvent*)event;
+            int x = mouse_event->x()/(m_attribute_tab_zoom);
+            int y = mouse_event->y()/(m_attribute_tab_zoom);
+            std::pair<int, int> key = std::make_pair(x/16, y/16);
+            auto itt = m_attribute_custom_map.find(key);
+            if (itt == m_attribute_custom_map.end())
+                m_attribute_custom_map.insert(std::make_pair(key, 0));
+            else if (itt->second == 3)
+                m_attribute_custom_map.erase(itt);
+            else
+                itt->second ++;
+            RedrawAttributeTab();
+        }
     }
+
     if (object == s_oam_tab_render)
     {
         if (event->type() == QEvent::MouseButtonPress)
@@ -986,6 +1003,21 @@ void MainWindow::SaveProject(const QString &file_name)
     }
     json.get<picojson::object>()["color_map"] = picojson::value(items);
 
+
+    if (!m_attribute_custom_map.empty())
+    {
+        picojson::array items = picojson::array();
+        for (auto itt = m_attribute_custom_map.begin(); itt != m_attribute_custom_map.end(); ++itt)
+        {
+                picojson::object item_obj;
+                item_obj["x"] = picojson::value( (double)(itt->first.first) );
+                item_obj["y"] = picojson::value( (double)(itt->first.second) );
+                item_obj["a"] = picojson::value( (double)(itt->second) );
+                items.push_back(picojson::value(item_obj));
+        }
+        json.get<picojson::object>()["attribute_custom_map"] = picojson::value(items);
+    }
+
     {
         picojson::array items = picojson::array();
         for (auto itt = m_palette_sprite_cvt_rule.begin(); itt != m_palette_sprite_cvt_rule.end(); ++itt)
@@ -1035,6 +1067,7 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["export_nobg"] = picojson::value( 1.0 );
 
     json.get<picojson::object>()["export_sprites_offset"] = picojson::value( (double)ui->comboBox_export_sprite_offset->itemData(ui->comboBox_export_sprite_offset->currentIndex()).toInt() );
+    json.get<picojson::object>()["export_tiles_offset"] = picojson::value( (double)ui->lineEdit_export_tiles_offset->text().toInt() );
 
     QString json_str = QString::fromStdString(json.serialize(true));
     QFile file(file_name);
@@ -1186,6 +1219,19 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
+    m_attribute_custom_map.clear();
+    if (json.contains("attribute_custom_map"))
+    {
+        picojson::array items = json.get<picojson::object>()["attribute_custom_map"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
+        {
+            int x = (int)(itt->get<picojson::object>()["x"].get<double>());
+            int y = (int)(itt->get<picojson::object>()["y"].get<double>());
+            int a = (int)(itt->get<picojson::object>()["a"].get<double>());
+            m_attribute_custom_map.insert(std::make_pair(std::make_pair(x, y), a));
+        }
+    }
+
     if (json.contains("animation_f2"))
         ui->lineEdit_animation_browse2->setText( QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["animation_f2"].get<std::string>().c_str())) );
     if (json.contains("animation_f3"))
@@ -1278,6 +1324,10 @@ void MainWindow::LoadProject(const QString &file_name)
         ui->comboBox_export_sprite_offset->blockSignals(false);
     }
 
+    if (json.contains("export_tiles_offset"))
+        ui->lineEdit_export_tiles_offset->setText(QString("%1").arg((int)(json.get<picojson::object>()["export_sprites_offset"].get<double>())));
+    else
+        ui->lineEdit_export_tiles_offset->setText("0");
 
     ui->widget_blink_palette->setVisible(ui->checkBox_two_frames_blinking->isChecked());
     if (ui->checkBox_two_frames_blinking->isChecked())
@@ -1320,6 +1370,8 @@ void MainWindow::RedrawAttributeTab()
             {
                 int best_pal = 0;
                 int64_t best_pal_err = INT64_MAX;
+                std::pair<int, int> key = std::make_pair(x/16, y/16);
+                auto itt = m_attribute_custom_map.find(key);
                 for (int pal = 0; pal < 4; ++pal)
                 {
                     int64_t cell_error_sum = 0;
@@ -1372,7 +1424,9 @@ void MainWindow::RedrawAttributeTab()
                             }
                         }
                     }
-                    if (cell_error_sum < best_pal_err)
+
+                    if ( (itt != m_attribute_custom_map.end() && itt->second == pal) ||
+                         (itt == m_attribute_custom_map.end() && cell_error_sum < best_pal_err) )
                     {
                         best_pal_err = cell_error_sum;
                         best_pal = pal;
@@ -1380,6 +1434,8 @@ void MainWindow::RedrawAttributeTab()
                         memcpy(palette_c_best.data(), palette_c.data(), palette_c.size() * sizeof(palette_c[0]));
                     }
                 }
+
+
                 m_screen_attribute[(y/16) * 16 + x/16] = best_pal;
                 //Apply palette
                 for (int yi = 0; yi < 16; ++yi)
@@ -1438,6 +1494,8 @@ void MainWindow::RedrawAttributeTab()
             {
                 int best_pal = 0;
                 int64_t best_pal_err = INT64_MAX;
+                std::pair<int, int> key = std::make_pair(x/16, y/16);
+                auto itt = m_attribute_custom_map.find(key);
                 for (int pal = 0; pal < 4; ++pal)
                 {
                     int64_t cell_error_sum = 0;
@@ -1496,7 +1554,9 @@ void MainWindow::RedrawAttributeTab()
                             cell_error_sum += best_diff;
                         }
                     }
-                    if (cell_error_sum < best_pal_err)
+
+                    if ( (itt != m_attribute_custom_map.end() && itt->second == pal) ||
+                         (itt == m_attribute_custom_map.end() && cell_error_sum < best_pal_err) )
                     {
                         best_pal_err = cell_error_sum;
                         best_pal = pal;
@@ -1625,6 +1685,63 @@ void MainWindow::RedrawAttributeTab()
             painter.drawLine(0, y*m_attribute_tab_zoom, image.width(), y*m_attribute_tab_zoom);
         for (int x = 16; x < 256; x += 16)
             painter.drawLine(x*m_attribute_tab_zoom, 0, x*m_attribute_tab_zoom, image.height());
+    }
+
+    if (ui->checkBox_attribute_draw_index->isChecked())
+    {
+        QPainter painter(&image);
+        for (int y = 0; y < 15; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                painter.setPen(QColor(0xFF000000));
+                QString txt = QString("%1").arg((int)m_screen_attribute[y*16+x]);
+                int px = (x*16+4)*m_attribute_tab_zoom;
+                int py = (y*16+4)*m_attribute_tab_zoom + 8;
+                painter.drawText(px-1, py-1, txt);
+                painter.drawText(px+0, py-1, txt);
+                painter.drawText(px+1, py-1, txt);
+                painter.drawText(px-1, py-0, txt);
+                painter.drawText(px+0, py-0, txt);
+                painter.drawText(px+1, py-0, txt);
+                painter.drawText(px-1, py+1, txt);
+                painter.drawText(px+0, py+1, txt);
+                painter.drawText(px+1, py+1, txt);
+                painter.setPen(QColor(0xFFFFFF00));
+                painter.drawText(px, py, txt);
+            }
+        }
+    }
+
+    if (ui->checkBox_attribute_custom_index->isChecked())
+    {
+        QPainter painter(&image);
+        for (int y = 0; y < 15; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                std::pair<int, int> key = std::make_pair(x, y);
+                auto itt = m_attribute_custom_map.find(key);
+                if (itt != m_attribute_custom_map.end())
+                {
+                    painter.setPen(QColor(0xFF000000));
+                    QString txt = QString("%1").arg((int)itt->second);
+                    int px = (x*16+4)*m_attribute_tab_zoom + 8;
+                    int py = (y*16+4)*m_attribute_tab_zoom + 8;
+                    painter.drawText(px-1, py-1, txt);
+                    painter.drawText(px+0, py-1, txt);
+                    painter.drawText(px+1, py-1, txt);
+                    painter.drawText(px-1, py-0, txt);
+                    painter.drawText(px+0, py-0, txt);
+                    painter.drawText(px+1, py-0, txt);
+                    painter.drawText(px-1, py+1, txt);
+                    painter.drawText(px+0, py+1, txt);
+                    painter.drawText(px+1, py+1, txt);
+                    painter.setPen(QColor(0xFFFF0000));
+                    painter.drawText(px, py, txt);
+                }
+            }
+        }
     }
 
     int edit_irq_0 = ui->edit_irq_0->text().toInt();
@@ -2195,5 +2312,21 @@ void MainWindow::on_btn_animation_browse4_clicked()
 }
 
 
+void MainWindow::on_btn_oam_clear_color_mapping_clicked()
+{
+    m_palette_sprite_cvt_rule.clear();
+    RedrawOamTab();
+}
 
+
+void MainWindow::on_checkBox_attribute_draw_index_stateChanged(int)
+{
+    RedrawAttributeTab();
+}
+
+
+void MainWindow::on_checkBox_attribute_custom_index_stateChanged(int)
+{
+    RedrawAttributeTab();
+}
 

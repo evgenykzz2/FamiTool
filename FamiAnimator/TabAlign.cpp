@@ -130,8 +130,13 @@ void MainWindow::AlignTab_EventFilter(QObject* object, QEvent* event)
     }
 }
 
-void MainWindow::on_comboBox_align_slice_currentIndexChanged(int index)
+void MainWindow::on_comboBox_align_slice_currentIndexChanged(int)
 {
+    int index = ui->comboBox_align_slice->currentIndex();
+    if (index >= m_slice_vector.size() || m_spriteset_indexed_alpha.isNull())
+        return;
+    ui->edit_align_dx->setText(QString("%1").arg(m_slice_vector[index].dx));
+    ui->edit_align_dy->setText(QString("%1").arg(m_slice_vector[index].dy));
     AlignTab_Redraw();
 }
 
