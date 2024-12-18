@@ -491,11 +491,6 @@ void MainWindow::SaveProject(const QString &file_name)
     json.get<picojson::object>()["chr_align"] = picojson::value( (double)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt() );
     json.get<picojson::object>()["base_tiles"] = picojson::value( ui->lineEdit_base_tiles->text().toUtf8().toBase64().data() );
 
-    json.get<picojson::object>()["indexed_apply"] = picojson::value( (bool)ui->checkBox_make_indexed->isChecked() );
-    json.get<picojson::object>()["indexed_method"] = picojson::value( ui->comboBox_palette_method->currentText().toStdString() );
-    json.get<picojson::object>()["indexed_diether"] = picojson::value( (bool)ui->checkBox_palette_deither->isChecked() );
-    json.get<picojson::object>()["indexed_colors"] = picojson::value( (double)ui->lineEdit_palette_color_count->text().toInt() );
-
     int crop_x = ui->lineEdit_crop_x->text().toInt();
     int crop_y = ui->lineEdit_crop_y->text().toInt();
     int crop_width = ui->lineEdit_crop_width->text().toInt();
@@ -517,7 +512,7 @@ void MainWindow::SaveProject(const QString &file_name)
         item_obj["id"] = picojson::value( (double)(itt->first) );
 
         item_obj["mode"] = picojson::value( (double)(itt->second.frame_mode) );
-        if (itt->second.frame_mode != FrameMode_Skip && itt->second.frame_mode != FrameMode_Black)
+        /*if (itt->second.frame_mode != FrameMode_None)
         {
             item_obj["indexed"] = picojson::value( itt->second.indexed );
             if (itt->second.indexed)
@@ -541,10 +536,31 @@ void MainWindow::SaveProject(const QString &file_name)
                 item_obj[ QString("i%1").arg(color_n).toStdString() ] = picojson::value( (double)color_itt->second );
                 ++color_n;
             }
-        }
+        }*/
         items.push_back(picojson::value(item_obj));
     }
     json.get<picojson::object>()["frame_info"] = picojson::value(items);
+
+    picojson::array items_gop = picojson::array();
+    for (auto itt = m_frame_gop_map.begin(); itt != m_frame_gop_map.end(); ++itt)
+    {
+        picojson::object item_obj;
+        item_obj["id"] = picojson::value( (double)(itt->first) );
+
+        item_obj["index_method"] = picojson::value( (double)(itt->second.index_method) );
+        item_obj["diether_method"] = picojson::value( (double)(itt->second.diether_method) );
+        item_obj["colors"] = picojson::value( (double)(itt->second.colors) );
+        item_obj["brightness"] = picojson::value( (double)(itt->second.brightness) );
+        item_obj["saturation"] = picojson::value( (double)(itt->second.saturation) );
+        item_obj["noise_power"] = picojson::value( (double)(itt->second.noise_power) );
+        for (size_t p = 0; p < 16; ++p)
+        {
+            QString name = QString("p%1").arg(p);
+            item_obj[name.toStdString()] = picojson::value( (double)itt->second.palette[p] );
+        }
+        items_gop.push_back(picojson::value(item_obj));
+    }
+    json.get<picojson::object>()["gops"] = picojson::value(items_gop);
 
     {
         picojson::array items = picojson::array();
@@ -663,7 +679,7 @@ void MainWindow::LoadProject(const QString &file_name)
     if (json.contains("movie_crop_x"))
         ui->lineEdit_crop_x->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_x"].get<double>()));
     if (json.contains("movie_crop_y"))
-        ui->lineEdit_crop_x->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_y"].get<double>()));
+        ui->lineEdit_crop_y->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_y"].get<double>()));
     if (json.contains("movie_crop_width"))
         ui->lineEdit_crop_width->setText(QString("%1").arg((int)json.get<picojson::object>()["movie_crop_width"].get<double>()));
     if (json.contains("movie_crop_height"))
@@ -683,55 +699,49 @@ void MainWindow::LoadProject(const QString &file_name)
             int id = (int)(itt->get<picojson::object>()["id"].get<double>());
             FrameInfo info;
             info.frame_mode = (EFrameMode)(itt->get<picojson::object>()["mode"].get<double>());
-            if (info.frame_mode != FrameMode_Skip && info.frame_mode != FrameMode_Black)
-            {
-                info.indexed = itt->get<picojson::object>()["indexed"].get<bool>();
-                if (info.indexed)
-                {
-                    info.index_method = (EIndexMethod)(itt->get<picojson::object>()["index_method"].get<double>());
-                    info.diether = itt->get<picojson::object>()["diether"].get<bool>();
-                    info.colors = (int)(itt->get<picojson::object>()["colors"].get<double>());
-                }
-                info.palette.resize(16, 0x0f);
-                for (size_t p = 0; p < 16; ++p)
-                {
-                    QString name = QString("p%1").arg(p);
-                    info.palette[p] = (int)(itt->get<picojson::object>()[name.toStdString()].get<double>());
-                }
-                int color_map = (int)(itt->get<picojson::object>()["color_map"].get<double>());
-                for (int c = 0; c < color_map; ++c)
-                {
-                    int r = (int)(itt->get<picojson::object>()[QString("p%1").arg(c).toStdString()].get<double>());
-                    int g = (int)(itt->get<picojson::object>()[QString("g%1").arg(c).toStdString()].get<double>());
-                    int b = (int)(itt->get<picojson::object>()[QString("b%1").arg(c).toStdString()].get<double>());
-                    int i = (int)(itt->get<picojson::object>()[QString("i%1").arg(c).toStdString()].get<double>());
-                    info.color_map.insert(std::make_pair(r | (g << 8) | (b << 16), i));
-                }
-            }
             m_frame_info_map.insert(std::make_pair(id, info));
         }
     }
 
-    if (json.contains("indexed_apply"))
-        ui->checkBox_make_indexed->setChecked(json.get<picojson::object>()["indexed_apply"].get<bool>());
-    if (json.contains("indexed_diether"))
-        ui->checkBox_palette_deither->setChecked(json.get<picojson::object>()["indexed_diether"].get<bool>());
-    if (json.contains("indexed_colors"))
-        ui->lineEdit_palette_color_count->setText(QString("%1").arg((int)json.get<picojson::object>()["indexed_colors"].get<double>()));
-    if (json.contains("indexed_method"))
+    m_frame_gop_map.clear();
+    if (json.contains("gops"))
     {
-        QString method = QString::fromStdString(json.get<picojson::object>()["indexed_method"].get<std::string>());
-        ui->comboBox_palette_method->blockSignals(true);
-        for (int i = 0; i < ui->comboBox_palette_method->count(); ++i)
+        picojson::array items = json.get<picojson::object>()["gops"].get<picojson::array>();
+        for (auto itt = items.begin(); itt != items.end(); ++itt)
         {
-            if (ui->comboBox_palette_method->itemText(i) == method)
+            int id = (int)(itt->get<picojson::object>()["id"].get<double>());
+            GopInfo gop;
+            gop.index_method = (EIndexMethod)(itt->get<picojson::object>()["index_method"].get<double>());
+            gop.diether_method = (EDietherMethod)(itt->get<picojson::object>()["diether_method"].get<double>());
+            gop.colors = (itt->get<picojson::object>()["colors"].get<double>());
+            gop.brightness = (itt->get<picojson::object>()["brightness"].get<double>());
+            gop.saturation = (itt->get<picojson::object>()["saturation"].get<double>());
+            if (itt->contains("noise_power"))
+                gop.noise_power = (itt->get<picojson::object>()["noise_power"].get<double>());
+            gop.palette.resize(16, 0x0f);
+            for (size_t p = 0; p < 16; ++p)
             {
-                ui->comboBox_palette_method->setCurrentIndex(i);
-                break;
+                QString name = QString("p%1").arg(p);
+                gop.palette[p] = (int)(itt->get<picojson::object>()[name.toStdString()].get<double>());
             }
+            m_frame_gop_map.insert(std::make_pair(id, gop));
         }
-        ui->comboBox_palette_method->blockSignals(false);
     }
+
+    picojson::array items_gop = picojson::array();
+    for (auto itt = m_frame_gop_map.begin(); itt != m_frame_gop_map.end(); ++itt)
+    {
+        picojson::object item_obj;
+        item_obj["id"] = picojson::value( (double)(itt->first) );
+
+        for (size_t p = 0; p < 16; ++p)
+        {
+            QString name = QString("p%1").arg(p);
+            item_obj[name.toStdString()] = picojson::value( (double)itt->second.palette[p] );
+        }
+        items_gop.push_back(picojson::value(item_obj));
+    }
+    json.get<picojson::object>()["gops"] = picojson::value(items_gop);
 
     m_oam_vector.clear();
     if (json.contains("oam"))
@@ -747,7 +757,6 @@ void MainWindow::LoadProject(const QString &file_name)
             m_oam_vector.push_back(oam);
         }
     }
-    m_frame_build.clear();
     GeneralTab_UpdateMovieInfo();
     GeneralTab_ReloadBaseTiles();
     VideoTab_FullUpdate();
@@ -755,6 +764,15 @@ void MainWindow::LoadProject(const QString &file_name)
     GeneralTab_UpdatePalette();
     RedrawAttributeTab();
     FullUpdateOamTab();
+}
+
+std::map<int, GopInfo>::iterator MainWindow::FindGop(int index)
+{
+    auto gop_itt = m_frame_gop_map.upper_bound(index);
+    if (gop_itt == m_frame_gop_map.end())
+        return m_frame_gop_map.end();
+    gop_itt--;
+    return gop_itt;
 }
 
 void MainWindow::RedrawAttributeTab()
@@ -1149,5 +1167,10 @@ void MainWindow::on_radioButton_oam_draw_background_clicked()
 {
     RedrawOamTab();
 }
+
+
+
+
+
 
 

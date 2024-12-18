@@ -541,6 +541,11 @@ uint32_t AviReader::VideoHeight() const
         return 0;
 }
 
+bool AviReader::IsVideoFlipped() const
+{
+    return (uint32_t)(m_video_stream->height & 0x80000000) == 0;
+}
+
 uint32_t AviReader::VideoTicksPerFrame() const
 {
     return m_video_stream->frame_duration;

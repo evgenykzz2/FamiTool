@@ -31,8 +31,7 @@ public:
 
     QImage VideoTab_MovieImage(int frame_number);
     QImage VideoTab_CropImage(const QImage& original);
-    void VideoTab_BuildBlackFrame(std::shared_ptr<FrameImageCompilation>& build);
-    bool VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameImageCompilation>& build, int depth = 0);
+    QImage VideoTab_GetBuildFrame(int frame_number);
     void VideoTab_Init();
     void VideoTab_FullUpdate();
     void VideoTab_Redraw();
@@ -44,11 +43,18 @@ public:
     void SaveProject(const QString &file_name);
     void LoadProject(const QString &file_name);
 
+    std::map<int, GopInfo>::iterator FindGop(int index);
+
     void RedrawAttributeTab();
     void RedrawOamTab();
     void FullUpdateOamTab();
     void Export_SpriteConvert();
     void Export_Buffer(std::stringstream &stream, const void* data, size_t size);
+
+    void GenerateNesPaletteSet_EvgenyKz(const QImage &image, std::vector<int> &gen_palette, int colors, int brightness, int saturation, EDietherMethod diether_method, int noise_power);
+    QImage EvgenyKz_IndexedImage(const QImage &image, std::vector<int> &gen_palette, int brightness, int saturation, EDietherMethod diether_method, int noise_power);
+    QImage EvgenyKz_IndexedImage_16x16(const QImage &image, std::vector<int> &gen_palette, int brightness, int saturation, EDietherMethod diether_method, int noise_power);
+
 protected:
     virtual bool eventFilter(QObject* object, QEvent* event);
 private slots:
@@ -61,7 +67,6 @@ private slots:
     void on_actionOpen_triggered();
     void on_actionSave_triggered();
     void on_actionSave_as_triggered();
-    void on_pushButton_clear_colormapping_clicked();
     void on_tabWidget_currentChanged(int index);
     void on_radioButton_oam_pal0_clicked();
     void on_radioButton_oam_pal1_clicked();
@@ -71,9 +76,7 @@ private slots:
     void on_pushButton_export_clicked();
     void on_checkBox_attribute_grid_clicked();
     void on_lineEdit_palette_color_count_editingFinished();
-    void on_checkBox_palette_deither_clicked();
     void on_comboBox_palette_method_currentIndexChanged(int index);
-    void on_checkBox_make_indexed_clicked();
     void on_checkBox_draw_grid_clicked();
     void on_radioButton_oam_draw_original_clicked();
     void on_radioButton_oam_draw_result_clicked();
@@ -84,17 +87,25 @@ private slots:
     void on_lineEdit_video_frame_number_editingFinished();
     void on_pushButton_base_tiles_browse_clicked();
     void on_comboBox_video_view_mode_currentIndexChanged(int index);
+    void on_btn_framemode_skip_clicked();
+    void on_btn_framemode_black_clicked();
+    void on_btn_framemode_key_clicked();
+    void on_horizontalSlider_sliderReleased();
+    void on_combo_diether_currentIndexChanged(int index);
+    void on_btn_gen_palette_clicked();
 
-    void on_comboBox_frame_mode_currentIndexChanged(int index);
+    void on_edit_brightness_editingFinished();
 
-    void on_pushButton_copy_palette_clicked();
+    void on_edit_saturation_editingFinished();
+
+    void on_edit_noise_power_editingFinished();
 
 private:
     Ui::MainWindow *ui;
     QString m_project_file_name;
     std::shared_ptr<AviReader> m_avi_reader;
     std::map<int, FrameInfo> m_frame_info_map;
-    std::map<int, std::shared_ptr<FrameImageCompilation>> m_frame_build;
+    std::map<int, GopInfo> m_frame_gop_map;
 
     std::vector<Tile> m_base_tile_vector;
     std::map<Tile, size_t> m_base_tile_map;
@@ -108,7 +119,6 @@ private:
     //QImage m_image_indexed;
     //QImage m_image_screen;
     std::vector<uint8_t> m_spriteset_index;
-
 
     std::vector<uint8_t> m_screen_attribute; //1 byte per 16x16
     std::vector<uint8_t> m_screen_tiles; //16 bytes per 8x8

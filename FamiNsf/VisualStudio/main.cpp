@@ -9,7 +9,9 @@ int main()
     //fopen_s(&file, "../test_music/Super Mario Bros. (1985-09-13)(Nintendo EAD)(Nintendo).nsf", "rb");
     //fopen_s(&file, "../test_music/Battletoads & Double Dragon - The Ultimate Team (1993-06)(Rare)(Tradewest).nsf", "rb");
     //fopen_s(&file, "../test_music/Robocop 3 (1992-08)(Probe)(Ocean).nsf", "rb");
-    fopen_s(&file, "../test_music/DuckTales [Wanpaku Duck Yume Bouken] (1989-09)(Capcom).nsf", "rb");
+    //fopen_s(&file, "../test_music/DuckTales [Wanpaku Duck Yume Bouken] (1989-09)(Capcom).nsf", "rb");
+    //fopen_s(&file, "../test_music/Crisis Force (1991-08-27)(Konami).nsf", "rb");
+    fopen_s(&file, "../test_music/Contra Force (1992-09)(Konami).nsf", "rb");
     if (!file)
     {
         std::cout << "Can't load nsf file" << std::endl;
@@ -31,7 +33,7 @@ int main()
 
     FamiNsf nsf_player;
     nsf_player.Load(nsf.data(), nsf.size());
-    nsf_player.Init(6, 0);
+    nsf_player.Init(0, 0);
     //nsf_player.Init(0, 0);
 
     //while (true)

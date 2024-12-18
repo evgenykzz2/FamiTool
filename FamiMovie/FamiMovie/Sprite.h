@@ -17,10 +17,10 @@ enum EViewMode
 
 enum EFrameMode
 {
-    FrameMode_Skip = 0,
-    FrameMode_Black,
-    FrameMode_KeyFrame,
-    FrameMode_Inter,
+    FrameMode_None = 0,
+    FrameMode_Skip = 1,
+    FrameMode_Black = 2,
+    FrameMode_KeyFrame = 4
 };
 
 enum EIndexMethod
@@ -34,7 +34,17 @@ enum EIndexMethod
     IndexMethod_PnnLABQuantizer,
     IndexMethod_PnnQuantizer,
     IndexMethod_SpatialQuantizer,
-    IndexMethod_WuQuantizer
+    IndexMethod_WuQuantizer,
+
+    IndexMethod_EvgenyNes,
+};
+
+enum EDietherMethod
+{
+    DietherMethod_None = 0,
+    DietherMethod_Bayer = 1,
+    DietherMethod_BlueNoise = 2,
+    DietherMethod_Rnd = 3,
 };
 
 struct Tile
@@ -46,38 +56,39 @@ struct Tile
     }
 };
 
-struct FrameImageCompilation
+
+struct GopInfo
 {
-    //QDateTime last_use_time;
-    //QImage movie;
-    //QImage crop;
-    QImage indexed;
-    QImage palette_convert;
-    QImage tile_convert;
-    QImage final;
+    //bool indexed;
+    EIndexMethod index_method;
+    EDietherMethod diether_method;
+    int colors; //color count for indexing method
+    int brightness;
+    int saturation;
+    int noise_power;
+    std::vector<int> palette;
+
+    GopInfo():
+        //indexed(false),
+        index_method(IndexMethod_EvgenyNes),
+        diether_method(DietherMethod_None),
+        colors(11),
+        brightness(0),
+        saturation(0),
+        noise_power(0),
+        palette(16, 0x0F)
+    {}
 };
 
 struct FrameInfo
 {
     EFrameMode frame_mode;
-    bool indexed;
-    EIndexMethod index_method;
-    bool diether;
-    int colors; //color count for indexing method
-    std::vector<int> palette;
-    std::map<uint32_t, int> color_map;
     bool force_update;
 
     FrameInfo() :
-        frame_mode(FrameMode_Skip),
-        indexed(false),
-        index_method(IndexMethod_DivQuantizer),
-        diether(false),
-        colors(4),
+        frame_mode(FrameMode_None),
         force_update(true)
-    {
-        palette.resize(16, 0x0F);
-    }
+    {}
 };
 
 enum ECompression

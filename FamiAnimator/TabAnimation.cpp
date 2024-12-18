@@ -472,7 +472,8 @@ void MainWindow::AnimationTab_Redraw()
                     break;
                 }
             }
-            painter.drawImage(64 + m_animation[index].frames[frame].x, 64 + m_animation[index].frames[frame].y,
+            painter.drawImage(64 + m_animation[index].frames[frame].x + m_slice_vector[slice_index].dx,
+                              64 + m_animation[index].frames[frame].y + m_slice_vector[slice_index].dy,
                               m_spriteset_indexed_alpha,
                               m_slice_vector[slice_index].x, m_slice_vector[slice_index].y,
                               m_slice_vector[slice_index].width, m_slice_vector[slice_index].height);

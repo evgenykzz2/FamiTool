@@ -11,6 +11,8 @@ CONFIG += c++17
 SOURCES += \
     AviReader.cpp \
     Export.cpp \
+    IndexedE3.cpp \
+    NoiseTable.cpp \
     Palette.cpp \
     Sprite.cpp \
     TabGeneral.cpp \
@@ -34,6 +36,7 @@ SOURCES += \
 
 HEADERS += \
     AviReader.h \
+    NoiseTable.h \
     Palette.h \
     Sprite.h \
     dialogPickFamiPalette.h \

@@ -84,6 +84,7 @@ public:
     uint32_t VideoCompression() const;
     uint32_t VideoWidth() const;
     uint32_t VideoHeight() const;
+    bool IsVideoFlipped() const;
     size_t VideoFrameCount() const;
     uint32_t VideoTicksPerFrame() const;
     uint32_t VideoTimeScale() const;

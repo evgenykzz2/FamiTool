@@ -33,27 +33,26 @@ void MainWindow::VideoTab_Init()
     s_video_tab_render->setMouseTracking(true);
     ui->scrollArea_video_tab->installEventFilter(this);
 
-    ui->comboBox_frame_mode->blockSignals(true);
-    ui->comboBox_frame_mode->addItem("Skip", (int)FrameMode_Skip);
-    ui->comboBox_frame_mode->addItem("Black", (int)FrameMode_Black);
-    ui->comboBox_frame_mode->addItem("KeyFrame", (int)FrameMode_KeyFrame);
-    ui->comboBox_frame_mode->addItem("Inter", (int)FrameMode_Inter);
-    ui->comboBox_frame_mode->blockSignals(false);
-
     QValidator* validator_frame_number = new QIntValidator(0, 999999, this);
     ui->lineEdit_video_frame_number->setValidator(validator_frame_number);
     ui->lineEdit_palette_color_count->setValidator(validator_frame_number);
 
-    ui->comboBox_palette_method->addItem("DivQuantizer", (int)IndexMethod_DivQuantizer);
-    ui->comboBox_palette_method->addItem("Dl3Quantizer", (int)IndexMethod_Dl3Quantizer);
+    //ui->comboBox_palette_method->addItem("DivQuantizer", (int)IndexMethod_DivQuantizer);
+    //ui->comboBox_palette_method->addItem("Dl3Quantizer", (int)IndexMethod_Dl3Quantizer);
     //ui->combo_method->addItem("EdgeAwareSQuantizer", (int)IndexMethod_EdgeAwareSQuantizer);
-    ui->comboBox_palette_method->addItem("MedianCut", (int)IndexMethod_MedianCut);
+    //ui->comboBox_palette_method->addItem("MedianCut", (int)IndexMethod_MedianCut);
     //ui->combo_method->addItem("MoDEQuantizer", (int)IndexMethod_MoDEQuantizer);
-    ui->comboBox_palette_method->addItem("NeuQuantizer", (int)IndexMethod_NeuQuantizer);
-    ui->comboBox_palette_method->addItem("PnnLABQuantizer", (int)IndexMethod_PnnQuantizer);
-    ui->comboBox_palette_method->addItem("PnnQuantizer", (int)IndexMethod_DivQuantizer);
-    ui->comboBox_palette_method->addItem("SpatialQuantizer", (int)IndexMethod_SpatialQuantizer);
-    ui->comboBox_palette_method->addItem("WuQuantizer", (int)IndexMethod_WuQuantizer);
+    //ui->comboBox_palette_method->addItem("NeuQuantizer", (int)IndexMethod_NeuQuantizer);
+    //ui->comboBox_palette_method->addItem("PnnLABQuantizer", (int)IndexMethod_PnnQuantizer);
+    //ui->comboBox_palette_method->addItem("PnnQuantizer", (int)IndexMethod_DivQuantizer);
+    //ui->comboBox_palette_method->addItem("SpatialQuantizer", (int)IndexMethod_SpatialQuantizer);
+    //ui->comboBox_palette_method->addItem("WuQuantizer", (int)IndexMethod_WuQuantizer);
+    ui->comboBox_palette_method->addItem("EvgenyNes", (int)IndexMethod_EvgenyNes);
+
+    ui->combo_diether->addItem("None", (int)DietherMethod_None);
+    ui->combo_diether->addItem("Bayer", (int)DietherMethod_Bayer);
+    ui->combo_diether->addItem("Blue", (int)DietherMethod_BlueNoise);
+    ui->combo_diether->addItem("Rnd", (int)DietherMethod_Rnd);
 
     ui->comboBox_video_view_mode->addItem("Original", (int)ViewMode_Original);
     ui->comboBox_video_view_mode->addItem("Crop", (int)ViewMode_Crop);
@@ -120,38 +119,66 @@ void MainWindow::VideoTab_UpdateFrameNumber()
             return;
     }
 
-    ui->comboBox_frame_mode->blockSignals(true);
-    for (int i = 0; i < ui->comboBox_frame_mode->count(); ++i)
-    {
-        if (ui->comboBox_frame_mode->itemData(i) == itt->second.frame_mode)
-        {
-            ui->comboBox_frame_mode->setCurrentIndex(i);
-            break;
-        }
-    }
-    ui->comboBox_frame_mode->blockSignals(false);
+    if ( (int)( (int)itt->second.frame_mode & (int)FrameMode_Skip) != 0 )
+        ui->btn_framemode_skip->setChecked(true);
+    else
+        ui->btn_framemode_skip->setChecked(false);
+
+    if ( (int)( (int)itt->second.frame_mode & (int)FrameMode_Black) != 0 )
+        ui->btn_framemode_black->setChecked(true);
+    else
+        ui->btn_framemode_black->setChecked(false);
+
+    if ( (int)( (int)itt->second.frame_mode & (int)FrameMode_KeyFrame) != 0 )
+        ui->btn_framemode_key->setChecked(true);
+    else
+        ui->btn_framemode_key->setChecked(false);
+
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    bool enabled = gop_itt != m_frame_gop_map.end();
+    ui->btn_framemode_skip->setEnabled(enabled);
+    ui->btn_framemode_black->setEnabled(enabled);
+    ui->comboBox_palette_method->setEnabled(enabled);
+    ui->combo_diether->setEnabled(enabled);
+    ui->lineEdit_palette_color_count->setEnabled(enabled);
+    ui->edit_saturation->setEnabled(enabled);
+    ui->edit_brightness->setEnabled(enabled);
+    ui->edit_noise_power->setEnabled(enabled);
 
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     for (int i = 0; i < 16; ++i)
     {
         QImage img(s_palette_labels[i]->width(), s_palette_labels[i]->height(), QImage::Format_ARGB32);
-        img.fill(palette[itt->second.palette[i]]);
+        if (gop_itt == m_frame_gop_map.end())
+            img.fill(palette[0x0F]);
+        else
+            img.fill(palette[gop_itt->second.palette[i]]);
         s_palette_labels[i]->setPixmap(QPixmap::fromImage(img));
     }
 
-    ui->checkBox_make_indexed->setChecked(itt->second.indexed);
-    ui->comboBox_palette_method->blockSignals(true);
-    for (int i = 0; i < ui->comboBox_palette_method->count(); ++i)
+    //ui->checkBox_make_indexed->setChecked(itt->second.indexed);
+    if (gop_itt != m_frame_gop_map.end())
     {
-        if (ui->comboBox_palette_method->itemData(i) == itt->second.index_method)
+        ui->comboBox_palette_method->blockSignals(true);
+        for (int i = 0; i < ui->comboBox_palette_method->count(); ++i)
         {
-            ui->comboBox_palette_method->setCurrentIndex(i);
-            break;
+            if (ui->comboBox_palette_method->itemData(i) == gop_itt->second.index_method)
+            {
+                ui->comboBox_palette_method->setCurrentIndex(i);
+                break;
+            }
         }
+        ui->comboBox_palette_method->blockSignals(false);
+
+        ui->combo_diether->blockSignals(true);
+        ui->combo_diether->setCurrentIndex(gop_itt->second.diether_method);
+        ui->combo_diether->blockSignals(false);
+        ui->edit_saturation->setText(QString("%1").arg(gop_itt->second.saturation));
+        ui->edit_brightness->setText(QString("%1").arg(gop_itt->second.brightness));
+        ui->edit_noise_power->setText(QString("%1").arg(gop_itt->second.noise_power));
+        ui->lineEdit_palette_color_count->setText(QString("%1").arg(gop_itt->second.colors));
     }
-    ui->comboBox_palette_method->blockSignals(false);
-    ui->checkBox_palette_deither->setChecked(itt->second.diether);
-    ui->lineEdit_palette_color_count->setText(QString("%1").arg(itt->second.colors));
+
     VideoTab_Redraw();
 }
 
@@ -164,11 +191,16 @@ QImage MainWindow::VideoTab_MovieImage(int frame_number)
         return image;
     }
 
+    bool flip = m_avi_reader->IsVideoFlipped();
     QImage image(m_avi_reader->VideoWidth(), m_avi_reader->VideoHeight(), QImage::Format_ARGB32);
     for (int y = 0; y < image.height(); ++y)
     {
         uint8_t* dst_line = image.scanLine(y);
-        const uint8_t* src_line = s_video_frame_original.data() + y * image.width()*3;
+        const uint8_t* src_line;
+        if (flip)
+            src_line = s_video_frame_original.data() + (image.height() - y - 1) * image.width()*3;
+        else
+            src_line = s_video_frame_original.data() + y * image.width()*3;
         for (int x = 0; x < image.width(); ++x)
         {
             if (src_line+x*3+2 >= s_video_frame_original.data() + s_video_frame_original.size())
@@ -179,6 +211,7 @@ QImage MainWindow::VideoTab_MovieImage(int frame_number)
             dst_line[x*4+3] = 0xFF;
         }
     }
+
     return image;
 }
 
@@ -219,25 +252,11 @@ QImage MainWindow::VideoTab_CropImage(const QImage& original)
     return image_crop;
 }
 
-void MainWindow::VideoTab_BuildBlackFrame(std::shared_ptr<FrameImageCompilation>& build)
+QImage MainWindow::VideoTab_GetBuildFrame(int frame_number)
 {
-    build = std::make_shared<FrameImageCompilation>();
-    build->indexed = QImage(256, 240, QImage::Format_Indexed8);
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-    build->indexed.setColorCount(64);
-    for (UINT i = 0; i < 64; ++i)
-        build->indexed.setColor(i, QRgb(0xFF000000 | palette[i]));
-    build->indexed.fill(0x0F);
-    build->palette_convert = build->indexed;
-    build->tile_convert = build->indexed;
-}
-
-bool MainWindow::VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameImageCompilation>& build, int depth)
-{
-    if (frame_number < 0 || depth > 20)
+    if (frame_number < 0)
     {
-        VideoTab_BuildBlackFrame(build);
-        return false;
+        return QImage();
     }
 
     auto info_itt = m_frame_info_map.find(frame_number);
@@ -248,52 +267,21 @@ bool MainWindow::VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameI
         info_itt = m_frame_info_map.find(frame_number);
     }
 
-    auto itt = m_frame_build.find(frame_number);
-    if (itt != m_frame_build.end())
-    {
-        if (!info_itt->second.force_update)
-        {
-            build = itt->second;
-            return true;
-        } else
-            info_itt->second.force_update = false;
-    }
-
-
-    if (info_itt->second.frame_mode == FrameMode_Black)
-    {
-        VideoTab_BuildBlackFrame(build);
-        m_frame_build.insert(std::make_pair(frame_number, build));
-        return true;
-    }
-
-    if (info_itt->second.frame_mode == FrameMode_Skip)
-    {
-        return VideoTab_GetBuildFrame(frame_number-1, build, depth+1);
-    }
-
     if (!m_avi_reader)
-    {
-        VideoTab_BuildBlackFrame(build);
-        return false;
-    }
+        return QImage();
 
     if (!m_avi_reader->VideoFrameRead(frame_number, s_video_frame_original))
-    {
-        VideoTab_BuildBlackFrame(build);
-        return false;
-    }
+        return QImage();
+
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return QImage();
 
     QImage movie_image = VideoTab_MovieImage(frame_number);
     QImage crop_image = VideoTab_CropImage(movie_image);
 
-    if (itt != m_frame_build.end())
-        build = itt->second;
-    else
-        build = std::make_shared<FrameImageCompilation>();
-    build->indexed = QImage(256, 240, QImage::Format_Indexed8);
-
     //if (info_itt->second.indexed)
+#if 0
     {
         std::unique_ptr<Gdiplus::Bitmap> src_bitmap( new Gdiplus::Bitmap(crop_image.width(), crop_image.height(), PixelFormat32bppARGB) );
         Gdiplus::BitmapData src_data;
@@ -313,59 +301,59 @@ bool MainWindow::VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameI
         }
         src_bitmap->UnlockBits(&src_data);
 
-        UINT max_colors = info_itt->second.colors;
+        UINT max_colors = gop_itt->second.colors;
         Gdiplus::Bitmap dst_bitmap(crop_image.width(), crop_image.height(), PixelFormat8bppIndexed);
 
 
-        if (info_itt->second.index_method == IndexMethod_DivQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_DivQuantizer)
         {
             DivQuant::DivQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_Dl3Quantizer)
+        if (gop_itt->second.index_method == IndexMethod_Dl3Quantizer)
         {
             Dl3Quant::Dl3Quantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_EdgeAwareSQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_EdgeAwareSQuantizer)
         {
             EdgeAwareSQuant::EdgeAwareSQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_MedianCut)
+        if (gop_itt->second.index_method == IndexMethod_MedianCut)
         {
             MedianCutQuant::MedianCut quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_MoDEQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_MoDEQuantizer)
         {
             MoDEQuant::MoDEQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_NeuQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_NeuQuantizer)
         {
             NeuralNet::NeuQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_PnnLABQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_PnnLABQuantizer)
         {
             PnnLABQuant::PnnLABQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_PnnQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_PnnQuantizer)
         {
             PnnQuant::PnnQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_SpatialQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_SpatialQuantizer)
         {
             SpatialQuant::SpatialQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
-        if (info_itt->second.index_method == IndexMethod_WuQuantizer)
+        if (gop_itt->second.index_method == IndexMethod_WuQuantizer)
         {
             nQuant::WuQuantizer quantizer;
-            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, info_itt->second.diether);
+            quantizer.QuantizeImage(src_bitmap.get(), &dst_bitmap, max_colors, gop_itt->second.diether_method);
         }
 
         dst_bitmap.LockBits(&image_rect, ImageLockModeRead, dst_bitmap.GetPixelFormat(), &src_data);
@@ -398,9 +386,12 @@ bool MainWindow::VideoTab_GetBuildFrame(int frame_number, std::shared_ptr<FrameI
             }
         }*/
     }
+#endif
 
-    m_frame_build.insert(std::make_pair(frame_number, build));
-    return true;
+    QImage indexed = EvgenyKz_IndexedImage(crop_image, gop_itt->second.palette,
+                                           gop_itt->second.brightness, gop_itt->second.saturation, gop_itt->second.diether_method, gop_itt->second.noise_power);
+
+    return indexed;
 }
 
 void MainWindow::VideoTab_Redraw()
@@ -425,22 +416,9 @@ void MainWindow::VideoTab_Redraw()
         image_view = image_view.scaled(image_view.width()*s_video_tab_zoom, image_view.height()*s_video_tab_zoom);
     } else
     {
-        std::shared_ptr<FrameImageCompilation> build;
-        if (!VideoTab_GetBuildFrame(frame_number, build))
-            return;
+        QImage indexed = VideoTab_GetBuildFrame(frame_number);
         image_view = QImage(256, 240, QImage::Format_ARGB32);
-        {
-            QPainter painter(&image_view);
-            if (view_mode == ViewMode_Indexed)
-                painter.drawImage(0, 0, build->indexed);
-            else if (view_mode == ViewMode_NesPalette)
-                painter.drawImage(0, 0, build->palette_convert);
-            else if (view_mode == ViewMode_TileConverted)
-                painter.drawImage(0, 0, build->tile_convert);
-            else
-                painter.drawImage(0, 0, build->final);
-        }
-        image_view = image_view.scaled(image_view.width()*s_video_tab_zoom, image_view.height()*s_video_tab_zoom);
+        image_view = indexed.scaled(indexed.width()*s_video_tab_zoom, indexed.height()*s_video_tab_zoom);
     }
     s_video_tab_render->setPixmap(QPixmap::fromImage(image_view));
     s_video_tab_render->resize(image_view.width(), image_view.height());
@@ -460,10 +438,14 @@ void MainWindow::VideoTab_EventFilter(QObject* object, QEvent* event)
                 if (itt == m_frame_info_map.end())
                     return;
 
+                auto gop_itt = FindGop(ui->horizontalSlider->value());
+                if (gop_itt == m_frame_gop_map.end())
+                    return;
+
                 m_pick_pallete_index = i;
                 const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
                 m_pick_color_dialog.SetPalette(palette);
-                m_pick_color_dialog.SetPaletteIndex(itt->second.palette[m_pick_pallete_index]);
+                m_pick_color_dialog.SetPaletteIndex(gop_itt->second.palette[m_pick_pallete_index]);
                 m_pick_color_dialog.UpdatePalette();
                 m_pick_color_dialog.disconnect(SIGNAL(SignalPaletteSelect(int)));
                 connect(&m_pick_color_dialog, SIGNAL(SignalPaletteSelect(int)), SLOT(PaletteWindow_Slot_PaletteSelect(int)), Qt::UniqueConnection);
@@ -493,6 +475,29 @@ void MainWindow::VideoTab_EventFilter(QObject* object, QEvent* event)
                     s_video_tab_zoom = 1;
                 else
                     VideoTab_Redraw();
+            }
+            if(key->key() == Qt::Key_Right)
+            {
+                on_pushButton_frame_next_clicked();
+            }
+            if(key->key() == Qt::Key_Left)
+            {
+                on_pushButton_frame_previous_clicked();
+            }
+            if(key->key() == Qt::Key_S)
+            {
+                ui->btn_framemode_skip->setChecked(!ui->btn_framemode_skip->isChecked());
+                on_btn_framemode_skip_clicked();
+            }
+            if(key->key() == Qt::Key_K)
+            {
+                ui->btn_framemode_key->setChecked(!ui->btn_framemode_key->isChecked());
+                on_btn_framemode_key_clicked();
+            }
+            if(key->key() == Qt::Key_B)
+            {
+                ui->btn_framemode_black->setChecked(!ui->btn_framemode_black->isChecked());
+                on_btn_framemode_black_clicked();
             }
         }
     }
@@ -538,12 +543,16 @@ void MainWindow::PaletteWindow_Slot_PaletteSelect(int index)
     if (itt == m_frame_info_map.end())
         return;
 
-    itt->second.palette[m_pick_pallete_index] = index;
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+
+    gop_itt->second.palette[m_pick_pallete_index] = index;
     itt->second.force_update = true;
 
     const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
     QImage img(s_palette_labels[m_pick_pallete_index]->width(), s_palette_labels[m_pick_pallete_index]->height(), QImage::Format_ARGB32);
-    img.fill(palette[itt->second.palette[m_pick_pallete_index]]);
+    img.fill(palette[gop_itt->second.palette[m_pick_pallete_index]]);
     s_palette_labels[m_pick_pallete_index]->setPixmap(QPixmap::fromImage(img));
 
     VideoTab_Redraw();
@@ -568,6 +577,12 @@ void MainWindow::on_pushButton_frame_next_clicked()
 }
 
 void MainWindow::on_horizontalSlider_sliderMoved(int)
+{
+    ui->lineEdit_video_frame_number->setText(QString("%1").arg(ui->horizontalSlider->value()));
+    VideoTab_UpdateFrameNumber();
+}
+
+void MainWindow::on_horizontalSlider_sliderReleased()
 {
     ui->lineEdit_video_frame_number->setText(QString("%1").arg(ui->horizontalSlider->value()));
     VideoTab_UpdateFrameNumber();
@@ -602,23 +617,59 @@ void MainWindow::on_comboBox_video_view_mode_currentIndexChanged(int )
     VideoTab_Redraw();
 }
 
-void MainWindow::on_comboBox_frame_mode_currentIndexChanged(int)
+void MainWindow::on_btn_framemode_skip_clicked()
 {
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
 
-    itt->second.frame_mode = (EFrameMode)ui->comboBox_frame_mode->itemData(ui->comboBox_frame_mode->currentIndex()).toInt();
+    if (ui->btn_framemode_skip->isChecked())
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode | (int)FrameMode_Skip );
+    else
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode & (~(int)FrameMode_Skip) );
     itt->second.force_update = true;
+
     VideoTab_Redraw();
 }
 
-void MainWindow::on_checkBox_make_indexed_clicked()
+void MainWindow::on_btn_framemode_black_clicked()
 {
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-    itt->second.indexed = ui->checkBox_make_indexed->isChecked();
+
+    if (ui->btn_framemode_black->isChecked())
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode | (int)FrameMode_Black );
+    else
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode & (~(int)FrameMode_Black) );
+    itt->second.force_update = true;
+
+    VideoTab_Redraw();
+}
+
+void MainWindow::on_btn_framemode_key_clicked()
+{
+    auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
+    if (itt == m_frame_info_map.end())
+        return;
+
+    if (ui->btn_framemode_key->isChecked())
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode | (int)FrameMode_KeyFrame );
+    else
+        itt->second.frame_mode = (EFrameMode)( (int)itt->second.frame_mode & (~(int)FrameMode_KeyFrame) );
+
+    if ( (int)( ((int)itt->second.frame_mode & (int)FrameMode_KeyFrame) ) != 0 )
+    {
+        auto gop_itt = FindGop(itt->first);
+        GopInfo gop;
+        if (gop_itt != m_frame_gop_map.end())
+            gop = gop_itt->second;
+        m_frame_gop_map.insert(std::make_pair(itt->first, gop));
+    } else
+    {
+        m_frame_gop_map.erase(itt->first);
+    }
+
     itt->second.force_update = true;
     VideoTab_Redraw();
 }
@@ -628,17 +679,23 @@ void MainWindow::on_comboBox_palette_method_currentIndexChanged(int)
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-    itt->second.index_method = (EIndexMethod)ui->comboBox_palette_method->itemData(ui->comboBox_palette_method->currentIndex()).toInt();
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+    gop_itt->second.index_method = (EIndexMethod)ui->comboBox_palette_method->itemData(ui->comboBox_palette_method->currentIndex()).toInt();
     itt->second.force_update = true;
     VideoTab_Redraw();
 }
 
-void MainWindow::on_checkBox_palette_deither_clicked()
+void MainWindow::on_combo_diether_currentIndexChanged(int index)
 {
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-    itt->second.diether = ui->checkBox_palette_deither->isChecked();
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+    gop_itt->second.diether_method = (EDietherMethod)index;
     itt->second.force_update = true;
     VideoTab_Redraw();
 }
@@ -648,39 +705,67 @@ void MainWindow::on_lineEdit_palette_color_count_editingFinished()
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-    itt->second.colors = ui->lineEdit_palette_color_count->text().toInt();
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+    gop_itt->second.colors = ui->lineEdit_palette_color_count->text().toInt();
     itt->second.force_update = true;
     VideoTab_Redraw();
 }
 
-void MainWindow::on_pushButton_clear_colormapping_clicked()
+
+void MainWindow::on_btn_gen_palette_clicked()
 {
     auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-    itt->second.color_map.clear();
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+
+    QImage movie_image = VideoTab_MovieImage(ui->horizontalSlider->value());
+    QImage crop_image = VideoTab_CropImage(movie_image);
+
+    //crop_image.save("crop_image.png");
+    //qDebug() << "frame:" << itt->first << gop_itt->first;
+
+    GenerateNesPaletteSet_EvgenyKz(crop_image, gop_itt->second.palette, gop_itt->second.colors, gop_itt->second.brightness, gop_itt->second.saturation, gop_itt->second.diether_method, gop_itt->second.noise_power);
     itt->second.force_update = true;
+    VideoTab_UpdateFrameNumber();
+}
+
+void MainWindow::on_edit_brightness_editingFinished()
+{
+    auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
+    if (itt == m_frame_info_map.end())
+        return;
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+    gop_itt->second.brightness = ui->edit_brightness->text().toInt();
     VideoTab_Redraw();
 }
 
-void MainWindow::on_pushButton_copy_palette_clicked()
+void MainWindow::on_edit_saturation_editingFinished()
 {
-    int frame_number = ui->horizontalSlider->value();
-    auto itt = m_frame_info_map.find(frame_number);
+    auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
     if (itt == m_frame_info_map.end())
         return;
-
-    auto itt_prev = m_frame_info_map.find(frame_number-1);
-    if (itt_prev == m_frame_info_map.end())
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
         return;
-    itt->second.palette = itt_prev->second.palette;
-    itt->second.force_update = true;
-    const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-    for (int i = 0; i < 16; ++i)
-    {
-        QImage img(s_palette_labels[i]->width(), s_palette_labels[i]->height(), QImage::Format_ARGB32);
-        img.fill(palette[itt->second.palette[i]]);
-        s_palette_labels[i]->setPixmap(QPixmap::fromImage(img));
-    }
+    gop_itt->second.saturation = ui->edit_saturation->text().toInt();
+    VideoTab_Redraw();
+}
+
+void MainWindow::on_edit_noise_power_editingFinished()
+{
+    auto itt = m_frame_info_map.find(ui->horizontalSlider->value());
+    if (itt == m_frame_info_map.end())
+        return;
+    auto gop_itt = FindGop(ui->horizontalSlider->value());
+    if (gop_itt == m_frame_gop_map.end())
+        return;
+    gop_itt->second.noise_power = ui->edit_noise_power->text().toInt();
     VideoTab_Redraw();
 }
