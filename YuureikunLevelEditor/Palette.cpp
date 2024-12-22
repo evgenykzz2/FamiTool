@@ -114,6 +114,23 @@ const uint32_t* GetPalette(EPalette palette)
     }
 }
 
+std::vector<int> GetPaletteYuv(EPalette palette)
+{
+    const uint32_t* pal = GetPalette(palette);
+    std::vector<int> yuv(64*4, 0);
+    for (int i = 0; i < 64; ++i)
+    {
+        int r = (int)((pal[i]      ) & 0xFF);
+        int g = (int)((pal[i] >>  8) & 0xFF);
+        int b = (int)((pal[i] >> 16) & 0xFF);
+
+        yuv[i*4+0] =  ((int)(0.299   *1024)*r + (int)(0.587   *1024)*g + (int)(0.144   *1024)*b) >> 10;
+        yuv[i*4+1] = (((int)(-0.14713*1024)*r + (int)(-0.28886*1024)*g + (int)(0.436   *1024)*b) >> 10) + 128;
+        yuv[i*4+2] = (((int)(0.615   *1024)*r + (int)(-0.51499*1024)*g + (int)(-0.10001*1024)*b) >> 10) + 128;
+    }
+    return yuv;
+}
+
 uint32_t ColorAvg(uint32_t a, uint32_t b)
 {
     uint8_t ra = (a >>  0) & 0xFF;

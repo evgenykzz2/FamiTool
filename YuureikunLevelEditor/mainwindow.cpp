@@ -211,6 +211,30 @@ QString MainWindow::RelativeToAbsolute(const QString &file_name)
     return file_name;
 }
 
+static bool IsUtfString(const QString &str)
+{
+    for (int i = 0; i < str.length(); ++i)
+    {
+        if (str[i] >= 'a' && str[i] <= 'z')
+        {
+            //it is OK
+        } else if (str[i] >= 'A' && str[i] <= 'Z')
+        {
+            //it is OK
+        } else if (str[i] >= '0' && str[i] <= '9')
+        {
+            //it is OK
+        } else if (str[i] == '!' || str[i] == '?' || str[i] == '^' || str[i] == '(' || str[i] == ')' ||
+                   str[i] == '-' || str[i] == '_' || str[i] == '+' || str[i] == '%' || str[i] == '<' ||
+                   str[i] == '>' || str[i] == '.' || str[i] == ',' || str[i] == ':' || str[i] == ';')
+        {
+            //it is OK
+        } else
+            return true;
+    }
+    return false;
+}
+
 void MainWindow::SaveProject(const QString &file_name)
 {
     picojson::value json;
@@ -219,7 +243,10 @@ void MainWindow::SaveProject(const QString &file_name)
     json.set<picojson::object>(picojson::object());
     json.get<picojson::object>()["palette_mode"] = picojson::value( (double)state.m_palette );
 
-    json.get<picojson::object>()["name"] = picojson::value( state.m_name.toUtf8().toBase64().data() );
+    if (IsUtfString(state.m_name))
+        json.get<picojson::object>()["name"] = picojson::value( state.m_name.toUtf8().toBase64().data() );
+    else
+        json.get<picojson::object>()["name_cstr"] = picojson::value( state.m_name.toStdString().c_str() );
     //json.get<picojson::object>()["compression"] = picojson::value( (double)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt() );
     //json.get<picojson::object>()["chr_align"] = picojson::value( (double)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt() );
 
@@ -235,7 +262,10 @@ void MainWindow::SaveProject(const QString &file_name)
         {
                 picojson::object item_obj;
                 item_obj["id"] = picojson::value( (double)(itt->first) );
-                item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                if (IsUtfString(itt->second.name))
+                    item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                else
+                    item_obj["name_cstr"] = picojson::value( itt->second.name.toStdString().c_str() );
                 for (int i = 0; i < 16; ++i)
                 {
                     QString name = QString("c%1").arg(i);
@@ -266,7 +296,10 @@ void MainWindow::SaveProject(const QString &file_name)
         {
                 picojson::object item_obj;
                 item_obj["id"] = picojson::value( (double)(itt->first) );
-                item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                if (IsUtfString(itt->second.name))
+                    item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                else
+                    item_obj["name_cstr"] = picojson::value( itt->second.name.toStdString().c_str() );
                 item_obj["chr_size"] = picojson::value( (double)(itt->second.chr_size) );
                 //item_obj["file_name"] = picojson::value( itt->second.file_name.toUtf8().toBase64().data() );
                 items.push_back(picojson::value(item_obj));
@@ -284,7 +317,10 @@ void MainWindow::SaveProject(const QString &file_name)
         {
                 picojson::object item_obj;
                 item_obj["id"] = picojson::value( (double)(itt->first) );
-                item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                if (IsUtfString(itt->second.name))
+                    item_obj["name"] = picojson::value( itt->second.name.toUtf8().toBase64().data() );
+                else
+                    item_obj["name_cstr"] = picojson::value( itt->second.name.toStdString().c_str() );
                 item_obj["chrbank"] = picojson::value( (double)itt->second.chrbank );
                 item_obj["tileset"] = picojson::value( (double)itt->second.tileset );
                 item_obj["tile_x"] = picojson::value( (double)(itt->second.tile_x) );
@@ -368,6 +404,8 @@ void MainWindow::LoadProject(const QString &file_name)
 
     if (json.contains("name"))
         state.m_name = QString::fromUtf8( QByteArray::fromBase64(json.get<picojson::object>()["name"].get<std::string>().c_str()));
+    if (json.contains("name_cstr"))
+        state.m_name = QString::fromStdString( json.get<picojson::object>()["name_cstr"].get<std::string>().c_str() );
 
     if (json.contains("palette_map_index"))
         state.m_palette_map_index = json.get<picojson::object>()["palette_map_index"].get<double>();
@@ -380,7 +418,10 @@ void MainWindow::LoadProject(const QString &file_name)
         {
             Palette palette;
             int id = (int)(itt->get<picojson::object>()["id"].get<double>());
-            palette.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            if (itt->contains("name"))
+                palette.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            if (itt->contains("name_cstr"))
+                palette.name = QString::fromStdString( itt->get<picojson::object>()["name_cstr"].get<std::string>());
             for (int i = 0; i < 16; ++i)
             {
                 QString name = QString("c%1").arg(i);
@@ -422,31 +463,12 @@ void MainWindow::LoadProject(const QString &file_name)
         for (auto itt = items.begin(); itt != items.end(); ++itt)
         {
             ChrSet chr_set;
-            int id = (int)(itt->get<picojson::object>()["id"].get<double>());
-            chr_set.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));                 
+            int id = (int)(itt->get<picojson::object>()["id"].get<double>());            
+            if (itt->contains("name"))
+                chr_set.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            if (itt->contains("name_cstr"))
+                chr_set.name = QString::fromStdString( itt->get<picojson::object>()["name_cstr"].get<std::string>());
             chr_set.chr_size = itt->get<picojson::object>()["chr_size"].get<double>();
-            //chr_set.file_name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["file_name"].get<std::string>() .c_str()));
-            //QFileInfo info(chr_set.file_name);
-            //if (info.isAbsolute())
-                //chr_set.file_name = project_dir.relativeFilePath(chr_set.file_name);
-
-            /*if (!chr_set.file_name.isEmpty())
-            {
-                chr_set.chr_data = std::make_shared<std::vector<uint8_t>>(2048, 0x00);
-
-                QFile file(project_dir.absoluteFilePath(chr_set.file_name));
-                QByteArray byte_array;
-                if (file.open(QFile::ReadOnly))
-                {
-                    byte_array = file.readAll();
-                    file.close();
-
-                    int size = chr_set.chr_data->size();
-                    if (byte_array.size() < size)
-                        size = byte_array.size();
-                    memcpy(chr_set.chr_data->data(), byte_array.data(), size);
-                }
-            }*/
             state.m_chr_map.insert(std::make_pair(id, chr_set));
         }
     }
@@ -477,7 +499,10 @@ void MainWindow::LoadProject(const QString &file_name)
         {
             Block block;
             int id = (int)(itt->get<picojson::object>()["id"].get<double>());
-            block.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>().c_str()));
+            if (itt->contains("name"))
+                block.name = QString::fromUtf8( QByteArray::fromBase64( itt->get<picojson::object>()["name"].get<std::string>() .c_str()));
+            if (itt->contains("name_cstr"))
+                block.name = QString::fromStdString( itt->get<picojson::object>()["name_cstr"].get<std::string>());
             if (itt->contains("chrbank"))
                 block.chrbank = (int)(itt->get<picojson::object>()["chrbank"].get<double>());
             else
@@ -494,10 +519,7 @@ void MainWindow::LoadProject(const QString &file_name)
                 block.tile_y = itt->get<picojson::object>()["tile_y"].get<double>();
             else
                 block.tile_y = 0;
-            //block.tile_id[0] = (int)itt->get<picojson::object>()["t0"].get<double>();
-            //block.tile_id[1] = (int)itt->get<picojson::object>()["t1"].get<double>();
-            //block.tile_id[2] = (int)itt->get<picojson::object>()["t2"].get<double>();
-            //block.tile_id[3] = (int)itt->get<picojson::object>()["t3"].get<double>();
+
             block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
             if (itt->contains("overlay"))
             {

@@ -199,8 +199,8 @@ void MainWindow::ChrWnd_Recalculate()
     if (palette_itt == state.m_palette_map.end())
         return;
 
-    uint32_t color[4];
     const uint32_t* palette = GetPalette(state.m_palette);
+    std::vector<int> palette_yuv = GetPaletteYuv(state.m_palette);
 
     std::map<int, QImage> tileset_hash;
     for (auto block_itt = state.m_block_map.begin(); block_itt != state.m_block_map.end(); ++block_itt)
@@ -224,39 +224,26 @@ void MainWindow::ChrWnd_Recalculate()
         if (render_itt == s_chr_render.end())
             continue;
 
-        for (int i = 0; i < 4; ++i)
-            color[i] = palette[palette_itt->second.color[block_itt->second.palette * 4 + i]] | 0xFF000000;
+        QImage tile_image;
+        std::vector<uint8_t> dest_index;
+        BuildBlock(block_itt->second, palette, palette_yuv,
+                   palette_itt->second.color, hash_itt->second,
+                   tile_image, dest_index);
 
         for (int yb = 0; yb < 2; ++yb)
         {
             for (int xb = 0; xb < 2; ++xb)
             {
-                QImage image(8, 8, QImage::Format_ARGB32);
-                image.fill(0xFF000000);
+                QImage image = tile_image.copy(xb*8, yb*8, 8, 8);
                 std::vector<uint8_t> tile(16, 0);
                 for (int y = 0; y < 8; ++y)
                 {
                     for (int x = 0; x < 8; ++x)
                     {
-                        uint32_t tileset_pixel = hash_itt->second.pixel(block_itt->second.tile_x+x+xb*8, block_itt->second.tile_y+y+yb*8);
-                        int best_diff = std::numeric_limits<int>::max();
-                        int best_c = 0;
-                        for (int c = 0; c < 4; ++c)
-                        {
-                            int dr = (int)((tileset_pixel >> 0 ) & 0xFF) - (int)((color[c]      ) & 0xFF);
-                            int dg = (int)((tileset_pixel >> 8 ) & 0xFF) - (int)((color[c] >>  8) & 0xFF);
-                            int db = (int)((tileset_pixel >> 16) & 0xFF) - (int)((color[c] >> 16) & 0xFF);
-                            int diff = dr*dr + dg*dg + db*db;
-                            if (diff < best_diff)
-                            {
-                                best_diff = diff;
-                                best_c = c;
-                            }
-                        }
-                        image.setPixel(x, y, color[best_c]);
-                        if ( (int)(best_c & 1) == 1)
+                        int index = dest_index[x + xb*8 + (y + yb*8)*16];
+                        if ( (int)(index & 1) == 1)
                             tile[y+0] |= (0x80 >> x);
-                        if ( (int)(best_c & 2) == 2)
+                        if ( (int)(index & 2) == 2)
                             tile[y+8] |= (0x80 >> x);
                     }
                 }

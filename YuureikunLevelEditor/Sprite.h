@@ -83,3 +83,6 @@ struct TileSet
 
 
 QImage ChrRender(const void* chr, int tile_width, int tile_height, int tile_zoom, const uint32_t *color);
+void BuildBlock(const Block &block, const uint32_t* palette, const std::vector<int>& palette_yuv,
+                const uint8_t* palette_set, const QImage &tileset_image,
+                QImage &dest_tile, std::vector<uint8_t> &dest_index);

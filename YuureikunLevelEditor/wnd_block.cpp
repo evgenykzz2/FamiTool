@@ -282,20 +282,27 @@ void MainWindow::BlockWnd_RedrawTileset()
         auto palette_itt = state.m_palette_map.begin();
         if (palette_itt == state.m_palette_map.end())
             return;
-        const uint32_t* palette = GetPalette(state.m_palette);
+        std::vector<int> palette = GetPaletteYuv(state.m_palette);
         for (int y = 0; y < img.height(); ++y)
         {
             uint8_t* src = img.scanLine(y);
             uint8_t* dst = indexed_image.data() + y*img.width();
             for (int x = 0; x < img.width(); ++x)
             {
+                int r = src[x*4+0];
+                int g = src[x*4+1];
+                int b = src[x*4+2];
+                int cy =  ((int)(0.299   *1024)*r + (int)(0.587   *1024)*g + (int)(0.144   *1024)*b) >> 10;
+                int cu = (((int)(-0.14713*1024)*r + (int)(-0.28886*1024)*g + (int)(0.436   *1024)*b) >> 10) + 128;
+                int cv = (((int)(0.615   *1024)*r + (int)(-0.51499*1024)*g + (int)(-0.10001*1024)*b) >> 10) + 128;
+
                 int best_diff = std::numeric_limits<int>::max();
                 int best_c = 0;
                 for (int c = 0; c < 64; ++c)
                 {
-                    int dr = (int)(src[x*4+0]) - (int)((palette[c]      ) & 0xFF);
-                    int dg = (int)(src[x*4+1]) - (int)((palette[c] >>  8) & 0xFF);
-                    int db = (int)(src[x*4+2]) - (int)((palette[c] >> 16) & 0xFF);
+                    int dr = cy - palette[c*4+0];
+                    int dg = cu - palette[c*4+1];
+                    int db = cv - palette[c*4+2];
                     int diff = dr*dr + dg*dg + db*db;
                     if (diff < best_diff)
                     {
@@ -463,27 +470,24 @@ void MainWindow::BlockWnd_RedrawBlock()
     if (block_itt->second.overlay != ui->lineEdit_block_overlay->text())
         ui->lineEdit_block_overlay->setText(block_itt->second.overlay);
 
-/*  int chr0_id = ui->comboBox_block_chr0->itemData(state.m_block_chr0).toInt();
-    int chr1_id = ui->comboBox_block_chr1->itemData(state.m_block_chr1).toInt();
-
-    auto chr0_itt = state.m_chr_map.find(chr0_id);
-    auto chr1_itt = state.m_chr_map.find(chr1_id);*/
-
     auto palette_itt = state.m_palette_map.begin();
-    if (palette_itt == state.m_palette_map.end()
-            //|| chr0_itt == state.m_chr_map.end()
-            //|| chr1_itt == state.m_chr_map.end()
-            )
+    if (palette_itt == state.m_palette_map.end() )
     {
         ui->widget_block_param->setVisible(false);
         return;
     }
 
-    uint32_t color[4];
+
+
     const uint32_t* palette = GetPalette(state.m_palette);
+    std::vector<int> palette_yuv = GetPaletteYuv(state.m_palette);
+    uint32_t color[4];
 
     for (int i = 0; i < 4; ++i)
-        color[i] = palette[palette_itt->second.color[block_itt->second.palette * 4 + i]] | 0xFF000000;
+    {
+        int index = palette_itt->second.color[block_itt->second.palette * 4 + i];
+        color[i] = palette[index] | 0xFF000000;
+    }
 
     {
         QImage palette_img(32*4, 32, QImage::Format_ARGB32);
@@ -499,52 +503,11 @@ void MainWindow::BlockWnd_RedrawBlock()
         ui->label_block_palette->setPixmap(QPixmap::fromImage(palette_img));
     }
 
-    QImage image(16, 16, QImage::Format_ARGB32);
-    image.fill(0xFF000000);
-    for (int y = 0; y < 16; ++y)
-    {
-        for (int x = 0; x < 16; ++x)
-        {
-            uint32_t tileset_pixel = s_tileset_image.pixel(block_itt->second.tile_x+x, block_itt->second.tile_y+y);
-            int best_diff = std::numeric_limits<int>::max();
-            int best_c = 0;
-            for (int c = 0; c < 4; ++c)
-            {
-                int dr = (int)((tileset_pixel >> 0 ) & 0xFF) - (int)((color[c]      ) & 0xFF);
-                int dg = (int)((tileset_pixel >> 8 ) & 0xFF) - (int)((color[c] >>  8) & 0xFF);
-                int db = (int)((tileset_pixel >> 16) & 0xFF) - (int)((color[c] >> 16) & 0xFF);
-                int diff = dr*dr + dg*dg + db*db;
-                if (diff < best_diff)
-                {
-                    best_diff = diff;
-                    best_c = c;
-                }
-            }
-            image.setPixel(x, y, color[best_c]);
-        }
-    }
-    /*for (int i = 0; i < 4; ++i)
-    {
-        int tile_id = block_itt->second.tile_id[i];
-        const uint8_t* chr = tile_id < 128 ? chr0_itt->second.chr_data->data() : chr1_itt->second.chr_data->data();
-        tile_id &= 0x7F;
-        int xp = (i & 1) * 8;
-        int yp = ((i & 2) >> 1) * 8;
-        const uint8_t* tile_ptr = (const uint8_t*)chr + tile_id*16;
-        for (int y = 0; y < 8; ++y)
-        {
-            uint8_t* image_ptr = image.scanLine(yp + y) + (xp)*4;
-            for (int x = 0; x < 8; ++x)
-            {
-                uint8_t c = 0;
-                if (tile_ptr[y+0] & (0x80 >> x))
-                    c |= 1;
-                if (tile_ptr[y+8] & (0x80 >> x))
-                    c |= 2;
-                ((uint32_t*)image_ptr)[x] = color[c];
-            }
-        }
-    }*/
+    QImage image;
+    std::vector<uint8_t> dest_index;
+    BuildBlock(block_itt->second, palette, palette_yuv,
+               palette_itt->second.color, s_tileset_image,
+               image, dest_index);
 
     if (!block_itt->second.overlay.isEmpty())
     {
@@ -579,23 +542,6 @@ void MainWindow::BlockWnd_RedrawBlock()
 
     int sz = 128;
     image = image.scaled(sz*2, sz*2);
-    /*{
-        QPainter painter(&image);
-        painter.setPen(QColor(0xFFFFFFFF));
-        painter.drawText(sz/2-8, sz/2-4, QString("%1").arg(block_itt->second.tile_id[0], 2, 16, QChar('0').toUpper()));
-        painter.drawText(sz + sz/2-8, sz/2-4, QString("%1").arg(block_itt->second.tile_id[1], 2, 16, QChar('0').toUpper()));
-        painter.drawText(sz/2-8, sz+sz/2-4, QString("%1").arg(block_itt->second.tile_id[2], 2, 16, QChar('0').toUpper()));
-        painter.drawText(sz + sz/2-8, sz+sz/2-4, QString("%1").arg(block_itt->second.tile_id[3], 2, 16, QChar('0').toUpper()));
-        painter.setBrush(Qt::transparent);
-        if (state.m_block_tile_slot == 0)
-            painter.drawRect(0, 0, sz-1, sz-1);
-        if (state.m_block_tile_slot == 1)
-            painter.drawRect(sz, 0, sz-1, sz-1);
-        if (state.m_block_tile_slot == 2)
-            painter.drawRect(0, sz, sz-1, sz-1);
-        if (state.m_block_tile_slot == 3)
-            painter.drawRect(sz, sz, sz-1, sz-1);
-    }*/
 
     ui->label_block_set_view->setPixmap(QPixmap::fromImage(image));
     ui->label_block_set_view->setMinimumSize(image.size());

@@ -32,7 +32,6 @@ void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
         if (m_zoom > 4.0)
             m_zoom = 4.0;
         ScreenWnd_RedrawScreen();
-        //return QWidget::eventFilter( object, event );
     }
 
 
@@ -53,9 +52,23 @@ void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
             {
                 if (block_x < state.m_screen_tiles.size() && block_y < state.m_screen_tiles[block_x].size())
                 {
-                    state.m_screen_tiles[block_x][block_y] = ui->listWidget_screen->currentRow();
-                    StatePush(state);
-                    ScreenWnd_RedrawScreen();
+                    if (state.m_screen_tiles[block_x][block_y] != ui->listWidget_screen->currentRow())
+                    {
+                        state.m_screen_tiles[block_x][block_y] = ui->listWidget_screen->currentRow();
+                        StatePush(state);
+                        ScreenWnd_RedrawScreen();
+                    }
+                }
+            } else
+            {
+                if (block_y < state.m_screen_tiles.size() && block_x < state.m_screen_tiles[block_y].size())
+                {
+                    if (state.m_screen_tiles[block_y][block_x] != ui->listWidget_screen->currentRow())
+                    {
+                        state.m_screen_tiles[block_y][block_x] = ui->listWidget_screen->currentRow();
+                        StatePush(state);
+                        ScreenWnd_RedrawScreen();
+                    }
                 }
             }
         }
@@ -87,6 +100,14 @@ void MainWindow::ScreenWnd_FullRedraw()
     QFileInfo project_file_info(m_project_file_name);
     QDir project_dir(project_file_info.dir());
 
+    const uint32_t* palette = GetPalette(state.m_palette);
+    std::vector<int> palette_yuv = GetPaletteYuv(state.m_palette);
+
+    //ToDo
+    auto palette_itt = state.m_palette_map.begin();
+    if (palette_itt == state.m_palette_map.end())
+        return;
+
     //Build images
     std::map<int, QImage> tileset_hash;
     for (auto block_itt = state.m_block_map.begin(); block_itt != state.m_block_map.end(); ++block_itt)
@@ -106,20 +127,26 @@ void MainWindow::ScreenWnd_FullRedraw()
         if (hash_itt == tileset_hash.end())
             continue;
 
-        QImage image = hash_itt->second.copy(block_itt->second.tile_x, block_itt->second.tile_y, 16, 16);
-        s_block_raw_image_map.insert(std::make_pair(block_itt->first, image));
+
+        QImage tile_image;
+        std::vector<uint8_t> tile_index;
+        BuildBlock(block_itt->second, palette, palette_yuv,
+                   palette_itt->second.color, hash_itt->second,
+                   tile_image, tile_index);
+
+        s_block_raw_image_map.insert(std::make_pair(block_itt->first, tile_image));
         if (!block_itt->second.overlay.isEmpty())
         {
             QImage over(project_dir.absoluteFilePath(block_itt->second.overlay));
             if (over.format() != QImage::Format_ARGB32)
                 over = over.convertToFormat(QImage::Format_ARGB32);
-            for (int y = 0; y < image.height(); ++y)
+            for (int y = 0; y < tile_image.height(); ++y)
             {
                 if (y >= over.height())
                     break;
-                uint8_t* line_ptr = image.scanLine(y);
+                uint8_t* line_ptr = tile_image.scanLine(y);
                 uint8_t* src_ptr = over.scanLine(y);
-                for (int x = 0; x < image.width(); ++x)
+                for (int x = 0; x < tile_image.width(); ++x)
                 {
                     if (x >= over.width())
                         break;
@@ -129,7 +156,7 @@ void MainWindow::ScreenWnd_FullRedraw()
                 }
             }
         }
-        s_block_image_map.insert(std::make_pair(block_itt->first, image));
+        s_block_image_map.insert(std::make_pair(block_itt->first, tile_image));
     }
 
     ui->listWidget_screen->blockSignals(true);
@@ -217,39 +244,42 @@ void MainWindow::ScreenWnd_RedrawScreen()
                     tile_cach_y = block_y;
                     tile_cach = itt->second;
                 }
-
-                /*int slot_index = (((inscreen_y/8)&1)*2) | ((inscreen_x/8)&1);
-                int tile_id = 0;//block_itt->second.tile_id[slot_index];
-                const uint8_t* tile_set = tile_id < 128 ? chr0_itt->second.chr_data->data() : chr1_itt->second.chr_data->data();
-                tile_set += (tile_id & 0x7F) * 16;
-                int c = 0;
-                if ((uint8_t)(tile_set[pixel_y+0] & (0x80 >> pixel_x)) != 0)
-                    c |= 1;
-                if ((uint8_t)(tile_set[pixel_y+8] & (0x80 >> pixel_x)) != 0)
-                    c |= 2;
-
-                uint8_t color = palette_itt->second.color[block_itt->second.palette*4 | c];*/
                 image_line[x] = tile_cach.pixel(pixel_x, pixel_y);
+            }
+        }
+    } else
+    {
+        for (int y = 0; y < image.height(); ++y)
+        {
+            int world_y = y + ui->scroll_screen_v->value();
+            int block_y = world_y / 16;
+            int pixel_y = world_y & 15;
+            uint32_t* image_line = (uint32_t*)image.scanLine(y);
 
-                /*if (ui->checkBox_screen_draw_overlay->isChecked() && !block_itt->second.overlay.isEmpty())
+            if (block_y < 0 || block_y >= state.m_screen_tiles.size())
+                continue;
+
+            for (int x = 0; x < image.width(); ++x)
+            {
+                int world_x = x + ui->scroll_screen_h->value();
+                int block_x = world_x / 16;
+                int pixel_x = world_x & 15;
+                if (block_x != tile_cach_x || block_y != tile_cach_y)
                 {
-                    auto image_itt = s_image_hash.find(block_itt->second.overlay);
-                    if (image_itt == s_image_hash.end())
-                    {
-                        QImage image(project_dir.absoluteFilePath(block_itt->second.overlay));
-                        if (image.format() != QImage::Format_ARGB32)
-                            image = image.convertToFormat(QImage::Format_ARGB32);
-                        s_image_hash.insert(std::make_pair(block_itt->second.overlay, image));
-                        image_itt = s_image_hash.find(block_itt->second.overlay);
-                    }
-                    if (inblock_x < image_itt->second.width() && inblock_y < image_itt->second.height())
-                    {
-                        uint8_t* src_ptr = image_itt->second.scanLine(inblock_y);
-                        ((uint8_t*)image_line)[x*4+0] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+0] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+0]) / 255;
-                        ((uint8_t*)image_line)[x*4+1] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+1] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+1]) / 255;
-                        ((uint8_t*)image_line)[x*4+2] = (src_ptr[inblock_x*4+3] * src_ptr[inblock_x*4+2] + (255 - src_ptr[inblock_x*4+3])*((uint8_t*)image_line)[x*4+2]) / 255;
-                    }
-                }*/
+
+                    if (block_x < 0 || block_x >= state.m_screen_tiles[block_y].size())
+                        continue;
+                    int tileset_id = state.m_screen_tiles[block_y][block_x];
+
+                    auto itt = s_block_raw_image_map.find(tileset_id);
+                    if (itt == s_block_raw_image_map.end())
+                        continue;
+
+                    tile_cach_x = block_x;
+                    tile_cach_y = block_y;
+                    tile_cach = itt->second;
+                }
+                image_line[x] = tile_cach.pixel(pixel_x, pixel_y);
             }
         }
     }
@@ -295,6 +325,25 @@ void MainWindow::ScreenWnd_RedrawScreen()
                     if (y >= state.m_screen_tiles[x].size())
                         continue;
                     painter.drawText((screen_x + 6)*m_zoom, (screen_y + 6)*m_zoom, QString("%1").arg( (uint16_t)state.m_screen_tiles[x][y], 2, 16, QChar('0') ).toUpper());
+                }
+            }
+        } else
+        {
+            for (int y = 0; y < YUUREIKUN_HEIGHT; ++y)
+            {
+                int screen_y = y*16 - ui->scroll_screen_v->value();
+                if (screen_y < 0 || screen_y > YUUREIKUN_HEIGHT*16)
+                    continue;
+                for (int x = 0; x < state.m_length; ++x)
+                {
+                    int screen_x = x*16 - ui->scroll_screen_h->value();
+                    if (screen_x < 0 || screen_x > YUUREIKUN_WIDTH*16)
+                        continue;
+                    if (y >= state.m_screen_tiles.size())
+                        continue;
+                    if (x >= state.m_screen_tiles[y].size())
+                        continue;
+                    painter.drawText((screen_x + 6)*m_zoom, (screen_y + 6)*m_zoom, QString("%1").arg( (uint16_t)state.m_screen_tiles[y][x], 2, 16, QChar('0') ).toUpper());
                 }
             }
         }

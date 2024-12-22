@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <QString>
+#include <vector>
 
 enum EPalette
 {
@@ -17,5 +18,6 @@ struct Palette
 };
 
 const uint32_t* GetPalette(EPalette);
+std::vector<int> GetPaletteYuv(EPalette palette);
 
 uint32_t ColorAvg(uint32_t a, uint32_t b);

@@ -4,7 +4,7 @@
 
 void MainWindow::GeneralWnd_Init()
 {
-    QValidator* validator = new QIntValidator(1, 256, this);
+    QValidator* validator = new QIntValidator(1, 1024, this);
     ui->edit_level_length->setValidator(validator);
 
     ui->comboBox_level_type->blockSignals(true);
