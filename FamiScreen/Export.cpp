@@ -91,7 +91,24 @@ std::vector<uint8_t> RlePack(const std::vector<uint8_t>& buffer, bool rle4)
                 break;
             count = j + 1;
         }
-        if (count > 2)
+        if (count > 1 && (src[i] == 0x00 || src[i] == 0xFF))
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        }
+        else if (count == 1 && (src[i] == 0x00 || src[i] == 0xFF) && buf.empty())
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        }
+        else if (count == 2 && buf.empty())
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        } else if (count > 2)
         {
             //Flush
             if (buf.size() > 0)
