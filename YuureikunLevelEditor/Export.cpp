@@ -8,74 +8,73 @@
 #include <QMessageBox>
 #include <qdebug.h>
 
-struct Entry
+static void Flush(std::vector<uint8_t>& buf, std::vector<uint8_t>& pack)
 {
-    uint8_t header;
-    std::vector<uint8_t> data;
-    uint16_t outpos;
+    if (buf.empty())
+        return;
 
-    Entry(uint8_t h) : header(h) {}
-    Entry(uint8_t h, const std::vector<uint8_t> &d) : header(h), data(d) {}
-};
-
-void Flush(const std::vector<uint8_t>& buf, std::vector<Entry>& pack)
-{
     if (buf.size() == 1)
     {
         if (buf[0] == 0x00)
         {
-            pack.push_back(Entry(1 | 0x40));
+            pack.push_back(1 | 0x40);
         }
         else if (buf[0] == 0xFF)
         {
-            pack.push_back(Entry(1 | 0x80));
+            pack.push_back(1 | 0x80);
         }
         else
         {
-            pack.push_back(Entry(1 | 0xC0, buf));
+            pack.push_back(1 | 0xC0);
+            pack.push_back(buf[0]);
         }
-    } else if (buf.size() == 2 && buf[0] == buf[1])
+    }
+    else if (buf.size() == 2 && buf[0] == buf[1])
     {
         if (buf[0] == 0x00)
         {
-            pack.push_back(Entry(2 | 0x40));
-        } else if (buf[0] == 0xFF)
+            pack.push_back(2 | 0x40);
+        }
+        else if (buf[0] == 0xFF)
         {
-            pack.push_back(Entry(2 | 0x80));
+            pack.push_back(2 | 0x80);
         }
         else
         {
-            std::vector<uint8_t> v;
-            v.push_back(buf[0]);
-            pack.push_back(Entry(0xC2, v));
+            pack.push_back(0xC2);
+            pack.push_back(buf[0]);
         }
     }
     else
     {
-        pack.push_back(Entry(buf.size(), buf));
+        pack.push_back((uint8_t)buf.size());
+        for (size_t j = 0; j < buf.size(); ++j)
+            pack.push_back(buf[j]);
     }
+    buf.resize(0);
 }
 
-void FlushEq(uint8_t val, uint8_t count, std::vector<Entry>& pack)
+static void FlushEq(uint8_t val, uint8_t count, std::vector<uint8_t>& pack)
 {
     if (val == 0x00)
     {
-        pack.push_back(Entry(count | 0x40));
-    } else if (val == 0xFF)
+        pack.push_back(count | 0x40);
+    }
+    else if (val == 0xFF)
     {
-        pack.push_back(Entry(count | 0x80));
+        pack.push_back(count | 0x80);
     }
     else
     {
-        std::vector<uint8_t> v;
-        v.push_back(val);
-        pack.push_back(Entry(count | 0xC0, v));
+        pack.push_back(count | 0xC0);
+        pack.push_back(val);
     }
 }
 
-std::vector<uint8_t> RlePack(const std::vector<uint8_t>& buffer, bool rle4)
+//Rle3 Original
+std::vector<uint8_t> Rle3Encode(const std::vector<uint8_t>& buffer)
 {
-    std::vector<Entry> pack;
+    std::vector<uint8_t> pack;
     std::vector<uint8_t> buf;
     const uint8_t* src = buffer.data();
     for (size_t i = 0; i < buffer.size(); )
@@ -90,15 +89,28 @@ std::vector<uint8_t> RlePack(const std::vector<uint8_t>& buffer, bool rle4)
                 break;
             count = j + 1;
         }
-        if (count > 2)
+        if (count > 1 && (src[i] == 0x00 || src[i] == 0xFF))
         {
-            //Flush
-            if (buf.size() > 0)
-            {
-                Flush(buf, pack);
-                buf.resize(0);
-            }
-            FlushEq(src[i], count, pack);
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        }
+        else if (count == 1 && (src[i] == 0x00 || src[i] == 0xFF) && buf.empty())
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        }
+        else if (count == 2 && buf.empty())
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
+            i += count;
+        }
+        else if (count > 2)
+        {
+            Flush(buf, pack);
+            FlushEq(src[i], (uint8_t)count, pack);
             i += count;
         }
         else
@@ -108,61 +120,13 @@ std::vector<uint8_t> RlePack(const std::vector<uint8_t>& buffer, bool rle4)
             if (buf.size() >= 63)
             {
                 Flush(buf, pack);
-                buf.resize(0);
             }
             ++i;
         }
     }
-    if (buf.size() > 0)
-    {
-        Flush(buf, pack);
-        buf.resize(0);
-    }
-    //pack.push_back(0);
-    //return pack;
-
-    //convert to buffer, apply copy method
-    std::vector<uint8_t> result;
-    for (size_t i = 0; i < pack.size(); ++i)
-    {
-        pack[i].outpos = result.size();
-        uint8_t type = pack[i].header & 0xC0;
-        if (type == 0 && pack[i].data.size() > 2)
-        {
-            size_t eq_id = i;
-            if (rle4)
-            {
-                for (size_t n = 0; n < i; ++n)
-                {
-                    if (pack[i].header != pack[n].header)
-                        continue;
-                    if (memcmp(pack[i].data.data(), pack[n].data.data(), pack[i].data.size()) == 0)
-                    {
-                        eq_id = n;
-                        break;
-                    }
-                }
-            }
-            if (eq_id == i)
-            {
-                result.push_back(pack[i].header);
-                result.insert(result.end(), pack[i].data.begin(), pack[i].data.end());
-            } else
-            {
-                result.push_back(0x40);
-                result.push_back(pack[eq_id].outpos & 0xFF);
-                result.push_back(pack[eq_id].outpos >> 8);
-                pack[i].header = 0;
-            }
-        } else
-        {
-            result.push_back(pack[i].header);
-            if (pack[i].data.size())
-                result.insert(result.end(), pack[i].data.begin(), pack[i].data.end());
-        }
-    }
-    result.push_back(0);
-    return result;
+    Flush(buf, pack);
+    pack.push_back(0);
+    return pack;
 }
 
 static void PrintBuffer(std::stringstream &stream, std::vector<uint8_t>& buffer)
@@ -519,10 +483,23 @@ void MainWindow::on_pushButton_export_clicked()
 
 void MainWindow::on_btn_export_blocks_clicked()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Export blocs", QDir::currentPath(), "*.inc");
+    std::map<int, TChrRender> chr_map = ChrWnd_GetTileMap();
+
+    QString file_name = QFileDialog::getSaveFileName(this, "Export blocks", "", "*.inc");
     if (file_name.isEmpty())
         return;
+
     State state = m_state.back();
+
+    std::map<int, int> block_index[4];
+    for (auto itt = chr_map.begin(); itt != chr_map.end(); ++itt)
+    {
+        block_index[0].insert(itt->second.block_index[0].begin(), itt->second.block_index[0].end());
+        block_index[1].insert(itt->second.block_index[1].begin(), itt->second.block_index[1].end());
+        block_index[2].insert(itt->second.block_index[2].begin(), itt->second.block_index[2].end());
+        block_index[3].insert(itt->second.block_index[3].begin(), itt->second.block_index[3].end());
+    }
+
 
     std::stringstream stream;
     stream << state.m_name.toStdString() << "_block_tiles:" << std::endl;
@@ -536,17 +513,17 @@ void MainWindow::on_btn_export_blocks_clicked()
     {
         int pos = 0;
         stream << state.m_name.toStdString() << "_block_tiles_" << std::dec << tile << ":" << std::endl;
-        for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+        for (auto itt = block_index[tile].begin(); itt != block_index[tile].end(); ++itt)
         {
             if (pos == 0)
                 stream << "  .db";
             else
                 stream << ",";
-            //stream << " $" << std::hex << std::setw(2) << std::setfill('0') << (uint16_t)itt->second.tile_id[tile];
+            stream << " $" << std::hex << std::setw(2) << std::setfill('0') << (uint16_t)itt->second;
             ++pos;
             auto next = itt;
             ++next;
-            if (pos == 16 || next == state.m_block_map.end())
+            if (pos == 16 || next == block_index[tile].end())
             {
                 stream << std::endl;
                 pos = 0;
@@ -554,8 +531,6 @@ void MainWindow::on_btn_export_blocks_clicked()
         }
         stream << std::endl;
     }
-
-
 
     stream << state.m_name.toStdString() << "_block_palette:" << std::endl;
     int n = 0;
@@ -574,101 +549,52 @@ void MainWindow::on_btn_export_blocks_clicked()
 }
 
 
-void MainWindow::on_btn_export_screens_clicked()
+void MainWindow::on_btn_export_stage_clicked()
 {
-    QString file_name = QFileDialog::getSaveFileName(this, "Export blocs", QDir::currentPath(), "*.inc");
+    QString file_name = QFileDialog::getSaveFileName(this, "Export stage", "", "*.inc");
     if (file_name.isEmpty())
         return;
     State state = m_state.back();
 
+
     std::stringstream stream;
     stream << state.m_name.toStdString() << "_data:" << std::endl;
 
-#if 0
-    stream << "  ;0: size" << std::endl;
-    stream << "  .db " << state.m_width_screens << " ;screen map width" << std::endl;
-    stream << "  .db " << state.m_height_screens << " ;screen map height" << std::endl;
-    stream << "  ;2: screen map pointer" << std::endl;
+    stream << "  ;0: level type" << std::endl;
+    stream << "  .db " << (int)state.m_level_type << std::endl;
+    stream << "  ;1: level length in blocks" << std::endl;
+    stream << "  .dw " << state.m_length << std::endl;
+    stream << "  ;3: Screen map pointer" << std::endl;
     stream << "  .db low(" << state.m_name.toStdString() << "_map)" << std::endl;
     stream << "  .db high(" << state.m_name.toStdString() << "_map)" << std::endl;
-    stream << "  ;4: block tiles 2x2" << std::endl;
+    stream << "  ;5: Block tiles pointer (2x2 tiles)" << std::endl;
     stream << "  .db low(" << state.m_name.toStdString() << "_block_tiles)" << std::endl;
     stream << "  .db high(" << state.m_name.toStdString() << "_block_tiles)" << std::endl;
-    stream << "  ;6: block palette" << std::endl;
+    stream << "  ;7: palette" << std::endl;
     stream << "  .db low(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
     stream << "  .db high(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
-    stream << "  ;8: block flags" << std::endl;
-    //stream << "  .db low(block_flags)" << std::endl;
-    //stream << "  .db high(block_flags)" << std::endl;
+    stream << "  ;9: block flags" << std::endl;
     stream << "  .db 0" << std::endl;
     stream << "  .db 0" << std::endl;
-    stream << "  ;A,B: scroll minimum x" << std::endl;
+    stream << "  ;B: row event" << std::endl;
     stream << "  .db 0, 0" << std::endl;
-    stream << "  ;C,D: scroll maximum x" << std::endl;
-    stream << "  .db 0, " << (state.m_width_screens-1) << std::endl;
-    stream << "  ;E,F: scroll minimum y" << std::endl;
-    stream << "  .db 0, 0" << std::endl;
-    stream << "  ;10,11: scroll maximum y" << std::endl;
-    stream << "  .db 0, " << (state.m_height_screens-1) << std::endl;
     stream << std::endl;
 
-    std::vector<int> screen_id;
-    std::map<std::vector<uint8_t>, int> screen_map;
-    std::vector<std::vector<uint8_t>> screen_vec;
-
-    for (int y = 0; y < state.m_height_screens; ++y)
-    {
-        for (int x = 0; x < state.m_width_screens; ++x)
-        {
-            auto screen_itt = state.m_world.find(std::make_pair(x, y));
-            if (screen_itt == state.m_world.end())
-            {
-                QMessageBox::critical(0, "Error", "Something went wrong");
-                return;
-            }
-            std::vector<uint8_t> blocks(256);
-            memcpy(blocks.data(), screen_itt->second.block, blocks.size());
-            auto itt = screen_map.find(blocks);
-            if (itt == screen_map.end())
-            {
-                int id = screen_map.size();
-                screen_map.insert(std::make_pair(blocks, id));
-                screen_vec.push_back(blocks);
-                screen_id.push_back(id);
-            } else
-            {
-                screen_id.push_back(itt->second);
-            }
-        }
-    }
 
     stream << state.m_name.toStdString() << "_map:" << std::endl;
-    for (size_t n = 0; n < screen_id.size(); ++n)
+    for (size_t n = 0; n < state.m_screen_tiles.size(); ++n)
     {
-        stream << "  .db low(" << state.m_name.toStdString() << "_scr_" << std::dec << screen_id[n] << "),"
-               << "  high(" << state.m_name.toStdString() << "_scr_" << std::dec << screen_id[n] << ")"
-               << std::endl;
-    }
-    stream << std::endl;
-
-    for (size_t n = 0; n < screen_vec.size(); ++n)
-    {
-        stream << state.m_name.toStdString() << "_scr_" << std::dec << n << ":" << std::endl;
-        for (int y = 0; y < 16; ++y)
+        stream << "  .db ";
+        for (int x = 0; x < state.m_screen_tiles[n].size(); ++x)
         {
-            stream << "  .db ";
-            for (int x = 0; x < 16; ++x)
-            {
-                if (x != 0)
-                    stream << ", ";
-                stream << "$" << std::hex << std::setw(2) << std::setfill('0')
-                       << (uint16_t)screen_vec[n][x+y*16];
-            }
-            stream << std::endl;
+            if (x != 0)
+                stream << ",";
+            stream << "$" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+                   << (uint16_t)state.m_screen_tiles[n][x];
         }
         stream << std::endl;
     }
-#endif
+
     QFile file(file_name);
     file.open(QFile::WriteOnly);
     file.write((const char*)stream.str().c_str(), stream.str().size());
@@ -676,4 +602,42 @@ void MainWindow::on_btn_export_screens_clicked()
 }
 
 
+void MainWindow::on_btn_export_chr_clicked()
+{
+    std::map<int, TChrRender> chr_map = ChrWnd_GetTileMap();
 
+    ECompression compresion = (ECompression)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt();
+    EChrAlign align = (EChrAlign)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt();
+
+    size_t align_size = 0;
+    if (align == ChrAlign_1K)
+        align_size = 1*1024;
+    else if (align == ChrAlign_2K)
+        align_size = 2*1024;
+    else if (align == ChrAlign_4K)
+        align_size = 4*1024;
+    else if (align == ChrAlign_8K)
+        align_size = 8*1024;
+
+    State state = m_state.back();
+    for (auto itt = state.m_chr_map.begin(); itt != state.m_chr_map.end(); ++itt)
+    {
+        auto chr_itt = chr_map.find(itt->first);
+        if (chr_itt == chr_map.end())
+            continue;
+
+        QString file_name = QFileDialog::getSaveFileName(this, QString("Export chr") + itt->second.name, "", "*.chr");
+        if (file_name.isEmpty())
+            continue;
+
+        std::vector<uint8_t> chr = chr_itt->second.chr_bits;
+        if (align_size != 0)
+            chr.resize((chr.size() + align_size - 1) & (~(align_size - 1)), 0xFF);
+
+
+        QFile file(file_name);
+        file.open(QFile::WriteOnly);
+        file.write((const char*)chr.data(), chr.size());
+        file.close();
+    }
+}

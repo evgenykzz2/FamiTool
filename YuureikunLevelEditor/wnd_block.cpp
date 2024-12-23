@@ -602,8 +602,8 @@ void MainWindow::on_btn_block_export_all_clicked()
     picojson::value json;
     json.set<picojson::object>(picojson::object());
 
-    json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
-    json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
+    //json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
+    //json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
     json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
     //json.get<picojson::object>()["block_tile_slot"] = picojson::value( (double)state.m_block_tile_slot );
     picojson::array items = picojson::array();
@@ -701,3 +701,48 @@ void MainWindow::on_checkBox_block_mark_used_tiles_clicked()
 {
     BlockWnd_RedrawTileset();
 }
+
+void MainWindow::on_btn_id_move_up_clicked()
+{
+    State state = m_state.back();
+    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+
+    auto block_itt = state.m_block_map.find(block_id);
+    if (block_itt == state.m_block_map.end())
+        return;
+
+    auto block_itt_prev = block_itt;
+    --block_itt_prev;
+
+    if (block_itt_prev == state.m_block_map.end())
+        return;
+
+    //Now Swap
+    Block a = block_itt->second;
+    Block b = block_itt_prev->second;
+
+    state.m_block_map_index = block_itt_prev->first;
+
+    block_itt->second = b;
+    block_itt_prev->second = a;
+
+
+    //Swap tile map
+    for (size_t y = 0; y < state.m_screen_tiles.size(); ++y)
+    {
+        for (size_t x = 0; x < state.m_screen_tiles[y].size(); ++x)
+        {
+            if (state.m_screen_tiles[y][x] == block_itt->first)
+            {
+                state.m_screen_tiles[y][x] = block_itt_prev->first;
+            } else if (state.m_screen_tiles[y][x] == block_itt_prev->first)
+            {
+                state.m_screen_tiles[y][x] = block_itt->first;
+            }
+        }
+    }
+
+    StatePush(state);
+    BlockWnd_FullRedraw();
+}
+

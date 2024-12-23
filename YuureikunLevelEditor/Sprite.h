@@ -81,6 +81,13 @@ struct TileSet
     QString file_name;
 };
 
+struct TChrRender
+{
+    std::vector<uint8_t> chr_bits;
+    std::map<std::vector<uint8_t>, int> tile_map;
+    std::map<int, int> block_index[4];
+    QImage chr_image;
+};
 
 QImage ChrRender(const void* chr, int tile_width, int tile_height, int tile_zoom, const uint32_t *color);
 void BuildBlock(const Block &block, const uint32_t* palette, const std::vector<int>& palette_yuv,

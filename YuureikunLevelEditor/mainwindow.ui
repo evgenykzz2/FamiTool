@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>6</number>
       </property>
       <widget class="QWidget" name="tab_general">
        <attribute name="title">
@@ -566,6 +566,13 @@
              <widget class="QPushButton" name="btn_block_set_remove">
               <property name="text">
                <string>Remove</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_id_move_up">
+              <property name="text">
+               <string>Move UP</string>
               </property>
              </widget>
             </item>
@@ -1124,7 +1131,7 @@
           <item row="0" column="0">
            <widget class="QLabel" name="label_9">
             <property name="text">
-             <string>Compression</string>
+             <string>Chr Compression</string>
             </property>
            </widget>
           </item>
@@ -1163,6 +1170,13 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_12">
           <item>
+           <widget class="QPushButton" name="btn_export_chr">
+            <property name="text">
+             <string>Export Chr</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="btn_export_blocks">
             <property name="text">
              <string>Export Blocks</string>
@@ -1170,9 +1184,9 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btn_export_screens">
+           <widget class="QPushButton" name="btn_export_stage">
             <property name="text">
-             <string>Export Screens</string>
+             <string>Export Stage</string>
             </property>
            </widget>
           </item>

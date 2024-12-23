@@ -27,8 +27,6 @@ struct State
     std::map<int, ChrSet> m_chr_map;
     int m_chr_map_index; //combo box item
 
-    int m_block_chr0;
-    int m_block_chr1;
     std::map<int, Block> m_block_map;
     int m_block_map_index; //combo box item
     //int m_block_tile_slot;
@@ -77,6 +75,7 @@ public:
     void ChrWnd_RedrawImage();
     void ChrWnd_RedrawFileName();
     void ChrWnd_Recalculate();
+    std::map<int, TChrRender> ChrWnd_GetTileMap();
 
     void ScreenWnd_Init();
     void ScreenWnd_FullRedraw();
@@ -123,7 +122,7 @@ private slots:
     void on_btn_block_export_all_clicked();
     void on_btn_block_import_all_clicked();
     void on_btn_export_blocks_clicked();
-    void on_btn_export_screens_clicked();
+    void on_btn_export_stage_clicked();
     void on_btn_tileset_add_clicked();
     void on_btn_tileset_remove_clicked();
     void on_comboBox_tileset_currentIndexChanged(int index);
@@ -133,6 +132,10 @@ private slots:
     void on_checkBox_block_mark_used_tiles_clicked();
     void on_comboBox_level_type_currentIndexChanged(int index);
     void on_edit_level_length_editingFinished();
+
+    void on_btn_id_move_up_clicked();
+
+    void on_btn_export_chr_clicked();
 
 private:
     Ui::MainWindow *ui;

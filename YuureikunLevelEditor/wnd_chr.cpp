@@ -10,12 +10,7 @@
 #define CHR_HEIGHT_TILES 8
 #define CHR_ZOOM 4
 
-struct TChrRender
-{
-    std::vector<uint8_t> chr_bits;
-    std::map<std::vector<uint8_t>, int> tile_map;
-    QImage chr_image;
-};
+
 
 std::map<int, TChrRender> s_chr_render;
 
@@ -252,19 +247,26 @@ void MainWindow::ChrWnd_Recalculate()
                 if (tile_itt == render_itt->second.tile_map.end())
                 {
                     int index = render_itt->second.tile_map.size();
+                    render_itt->second.block_index[xb+yb*2].insert(std::make_pair(block_itt->first, index));
                     render_itt->second.tile_map.insert(std::make_pair(tile, index));
                     render_itt->second.chr_bits.insert(render_itt->second.chr_bits.end(), tile.begin(), tile.end());
                     QPainter painter(&render_itt->second.chr_image);
                     painter.drawImage((index % 16) * 8, (index / 16) * 8, image);
+                } else
+                {
+                    render_itt->second.block_index[xb+yb*2].insert(std::make_pair(block_itt->first, tile_itt->second));
                 }
             }
         }
-
     }
 }
 
 
-
+std::map<int, TChrRender> MainWindow::ChrWnd_GetTileMap()
+{
+    ChrWnd_Recalculate();
+    return s_chr_render;
+}
 
 
 

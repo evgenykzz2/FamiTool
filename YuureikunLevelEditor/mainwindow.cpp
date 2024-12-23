@@ -35,8 +35,8 @@ MainWindow::MainWindow(QWidget *parent)
     state.m_palette_map_index = 0;
     state.m_chr_map_index = 0;
     state.m_block_map_index = 0;
-    state.m_block_chr1 = 0;
-    state.m_block_chr0 = 0;
+    //state.m_block_chr1 = 0;
+    //state.m_block_chr0 = 0;
     state.m_tile_set_index = 0;
     m_state.push_back(state);
 
@@ -70,7 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->comboBox_compression->blockSignals(true);
     ui->comboBox_compression->addItem("None", QVariant((int)Compression_None));
     ui->comboBox_compression->addItem("Rle3", QVariant((int)Compression_Rle3));
-    ui->comboBox_compression->addItem("Rle4", QVariant((int)Compression_Rle4));
+    //ui->comboBox_compression->addItem("Rle4", QVariant((int)Compression_Rle4));
     ui->comboBox_compression->blockSignals(false);
 
     ui->comboBox_chr_align->blockSignals(true);
@@ -308,8 +308,8 @@ void MainWindow::SaveProject(const QString &file_name)
     }
 
     {
-        json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
-        json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
+        //json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
+        //json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
         json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
         //json.get<picojson::object>()["block_tile_slot"] = picojson::value( (double)state.m_block_tile_slot );
         picojson::array items = picojson::array();
@@ -473,7 +473,7 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
-    if (json.contains("block_chr0"))
+    /*if (json.contains("block_chr0"))
         state.m_block_chr0 = json.get<picojson::object>()["block_chr0"].get<double>();
     else
         state.m_block_chr0 = 0;
@@ -481,7 +481,7 @@ void MainWindow::LoadProject(const QString &file_name)
     if (json.contains("block_chr1"))
         state.m_block_chr1 = json.get<picojson::object>()["block_chr1"].get<double>();
     else
-        state.m_block_chr1 = 0;
+        state.m_block_chr1 = 0;*/
 
     //if (json.contains("block_tile_slot"))
         //state.m_block_tile_slot = json.get<picojson::object>()["block_tile_slot"].get<double>();
@@ -597,6 +597,12 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_tileset)
         TilesetWnd_FullRedraw();
 }
+
+
+
+
+
+
 
 
 

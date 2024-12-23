@@ -144,7 +144,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->comboBox_compression->blockSignals(true);
     ui->comboBox_compression->addItem("None", QVariant((int)Compression_None));
     ui->comboBox_compression->addItem("Rle3", QVariant((int)Compression_Rle3));
-    ui->comboBox_compression->addItem("Rle4", QVariant((int)Compression_Rle4));
+    //ui->comboBox_compression->addItem("Rle4", QVariant((int)Compression_Rle4));
     ui->comboBox_compression->blockSignals(false);
 
     ui->comboBox_chr_align->blockSignals(true);
