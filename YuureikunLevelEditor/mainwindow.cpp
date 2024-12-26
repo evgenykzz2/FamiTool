@@ -35,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent)
     state.m_palette_map_index = 0;
     state.m_chr_map_index = 0;
     state.m_block_map_index = 0;
+    state.m_transform_index = 0;
     //state.m_block_chr1 = 0;
     //state.m_block_chr0 = 0;
     state.m_tile_set_index = 0;
@@ -308,10 +309,8 @@ void MainWindow::SaveProject(const QString &file_name)
     }
 
     {
-        //json.get<picojson::object>()["block_chr0"] = picojson::value( (double)state.m_block_chr0 );
-        //json.get<picojson::object>()["block_chr1"] = picojson::value( (double)state.m_block_chr1 );
         json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
-        //json.get<picojson::object>()["block_tile_slot"] = picojson::value( (double)state.m_block_tile_slot );
+        json.get<picojson::object>()["block_transform_index"] = picojson::value( (double)state.m_transform_index );
         picojson::array items = picojson::array();
         for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
         {
@@ -325,8 +324,10 @@ void MainWindow::SaveProject(const QString &file_name)
                 item_obj["tileset"] = picojson::value( (double)itt->second.tileset );
                 item_obj["tile_x"] = picojson::value( (double)(itt->second.tile_x) );
                 item_obj["tile_y"] = picojson::value( (double)(itt->second.tile_y) );
-                //item_obj["t2"] = picojson::value( (double)(itt->second.tile_id[2]) );
-                //item_obj["t3"] = picojson::value( (double)(itt->second.tile_id[3]) );
+
+                if (itt->second.transform_index >= 0)
+                    item_obj["transform"] = picojson::value( (double)(itt->second.transform_index) );
+
                 item_obj["pal"] = picojson::value( (double)(itt->second.palette) );
                 if (!itt->second.overlay.isEmpty())
                     item_obj["overlay"] = picojson::value( itt->second.overlay.toUtf8().toBase64().data() );
@@ -483,10 +484,10 @@ void MainWindow::LoadProject(const QString &file_name)
     else
         state.m_block_chr1 = 0;*/
 
-    //if (json.contains("block_tile_slot"))
-        //state.m_block_tile_slot = json.get<picojson::object>()["block_tile_slot"].get<double>();
-    //else
-        //state.m_block_tile_slot = 0;
+    if (json.contains("block_transform_index"))
+        state.m_transform_index = json.get<picojson::object>()["block_transform_index"].get<double>();
+    else
+        state.m_transform_index = 0;
 
     if (json.contains("block_map_index"))
         state.m_block_map_index = json.get<picojson::object>()["block_map_index"].get<double>();
@@ -519,6 +520,11 @@ void MainWindow::LoadProject(const QString &file_name)
                 block.tile_y = itt->get<picojson::object>()["tile_y"].get<double>();
             else
                 block.tile_y = 0;
+
+            if (itt->contains("transform"))
+                block.transform_index = itt->get<picojson::object>()["transform"].get<double>();
+            else
+                block.transform_index = -1;
 
             block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
             if (itt->contains("overlay"))
@@ -597,6 +603,12 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_tileset)
         TilesetWnd_FullRedraw();
 }
+
+
+
+
+
+
 
 
 

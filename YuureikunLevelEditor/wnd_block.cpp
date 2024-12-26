@@ -51,9 +51,17 @@ void MainWindow::BlockWnd_FullRedraw()
         ui->comboBox_block_set->addItem(itt->second.name, QVariant(itt->first));
     ui->comboBox_block_set->setCurrentIndex(state.m_block_map_index);
     ui->comboBox_block_set->blockSignals(false);
-
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
 
+    ui->comboBox_transform_block->blockSignals(true);
+    ui->comboBox_transform_block->clear();
+    ui->comboBox_transform_block->addItem("-None-", QVariant(-1));
+    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt )
+        ui->comboBox_transform_block->addItem(itt->second.name, QVariant(itt->first));
+    ui->comboBox_transform_block->blockSignals(false);
+
+
+    BlockWnd_RedrawTransformBlock();
     BlockWnd_RedrawTileset();
     BlockWnd_RedrawBlock();
 }
@@ -125,29 +133,6 @@ void MainWindow::BlockWnd_EventFilter(QObject* object, QEvent* event)
             }
         }
     }
-
-    /*if (object == ui->label_block_chr0 && event->type() == QEvent::MouseButtonPress)
-    {
-        QMouseEvent* mouse_event = (QMouseEvent*)event;
-        if ( (int)(mouse_event->buttons() & Qt::LeftButton) != 0 )
-        {
-            int x = mouse_event->x() / 32;
-            int y = mouse_event->y() / 32;
-            if (x < 16 && y < 8)
-            {
-                int index = y*16 + x;
-                State state = m_state.back();
-                int block_id = ui->comboBox_block_set->itemData(ui->comboBox_block_set->currentIndex()).toInt();
-                auto block_itt = state.m_block_map.find(block_id);
-                if (block_itt != state.m_block_map.end())
-                {
-                    block_itt->second.tile_id[state.m_block_tile_slot] = index;
-                    StatePush(state);
-                    BlockWnd_RedrawBlock();
-                }
-            }
-        }
-    }*/
 }
 
 void MainWindow::on_comboBox_block_set_currentIndexChanged(int index)
@@ -158,6 +143,7 @@ void MainWindow::on_comboBox_block_set_currentIndexChanged(int index)
     state.m_block_map_index = index;
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
     StatePush(state);
+    BlockWnd_RedrawTransformBlock();
     BlockWnd_RedrawBlock();
 }
 
@@ -172,6 +158,12 @@ void MainWindow::on_lineEdit_block_set_editingFinished()
         return;
     itt->second.name = ui->lineEdit_block_set->text();
     ui->comboBox_block_set->setItemText(state.m_block_map_index,  ui->lineEdit_block_set->text());
+
+    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
+    {
+        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->first)
+            ui->comboBox_transform_block->setItemText(i,  ui->lineEdit_block_set->text());
+    }
     StatePush(state);
 }
 
@@ -193,10 +185,10 @@ void MainWindow::on_btn_block_set_add_clicked()
     block.palette = ui->comboBox_block_set_palette->itemData(ui->comboBox_block_set_palette->currentIndex()).toInt();
     block.tile_x = 0;
     block.tile_y = 0;
+    block.transform_index = -1;
     block.tileset = ui->comboBox_block_tileset->itemData(ui->comboBox_block_tileset->currentIndex()).toInt();
     block.chrbank = ui->comboBox_block_chrbank->itemData(ui->comboBox_block_chrbank->currentIndex()).toInt();
 
-    //memset(block.tile_id, 0, sizeof(block.tile_id));
     state.m_block_map.insert(std::make_pair(found_id, block));
 
     ui->comboBox_block_set->blockSignals(true);
@@ -206,7 +198,12 @@ void MainWindow::on_btn_block_set_add_clicked()
     ui->comboBox_block_set->blockSignals(false);
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
 
+    ui->comboBox_transform_block->blockSignals(true);
+    ui->comboBox_transform_block->addItem(block.name, QVariant(found_id));
+    ui->comboBox_transform_block->blockSignals(false);
+
     StatePush(state);
+    BlockWnd_RedrawTransformBlock();
     BlockWnd_RedrawBlock();
 }
 
@@ -225,7 +222,17 @@ void MainWindow::on_btn_block_set_remove_clicked()
     ui->comboBox_block_set->blockSignals(false);
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
 
+    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
+    {
+        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->first)
+        {
+            ui->comboBox_transform_block->removeItem(i);
+            break;
+        }
+    }
+
     StatePush(state);
+    BlockWnd_RedrawTransformBlock();
     BlockWnd_RedrawBlock();
 }
 
@@ -253,6 +260,28 @@ void MainWindow::on_comboBox_block_tileset_currentIndexChanged(int index)
     itt->second.tileset = ui->comboBox_block_tileset->itemData(ui->comboBox_block_tileset->currentIndex()).toInt();
     StatePush(state);
     BlockWnd_RedrawBlock();
+}
+
+void MainWindow::BlockWnd_RedrawTransformBlock()
+{
+    State state = m_state.back();
+    int id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+    auto itt = state.m_block_map.find(id);
+    if (itt == state.m_block_map.end())
+        return;
+
+    ui->comboBox_transform_block->blockSignals(true);
+    ui->comboBox_transform_block->setCurrentIndex(0);   //-None-
+    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
+    {
+        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->second.transform_index)
+        {
+            ui->comboBox_transform_block->setCurrentIndex(i);
+            break;
+        }
+    }
+    ui->comboBox_transform_block->blockSignals(false);
+
 }
 
 void MainWindow::BlockWnd_RedrawTileset()
@@ -746,3 +775,16 @@ void MainWindow::on_btn_id_move_up_clicked()
     BlockWnd_FullRedraw();
 }
 
+void MainWindow::on_comboBox_transform_block_currentIndexChanged(int index)
+{
+    State state = m_state.back();
+    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+
+    auto block_itt = state.m_block_map.find(block_id);
+    if (block_itt == state.m_block_map.end())
+        return;
+
+    block_itt->second.transform_index = ui->comboBox_transform_block->itemData(ui->comboBox_transform_block->currentIndex()).toInt();
+    StatePush(state);
+    BlockWnd_RedrawTransformBlock();
+}

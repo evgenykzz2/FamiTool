@@ -290,8 +290,8 @@ void MainWindow::on_btn_export_clicked()
         stream << m_slice_vector[slice].caption.toStdString() << ":" << std::endl;
         stream << "    .db " << std::dec << m_slice_vector[slice].oam.size() << std::endl;
 
-        //for (size_t i = 0; i < m_slice_vector[slice].oam.size(); ++i)
-        for (int i =  m_slice_vector[slice].oam.size()-1; i >= 0; --i)
+        for (size_t i = 0; i < m_slice_vector[slice].oam.size(); ++i)
+        //for (int i =  m_slice_vector[slice].oam.size()-1; i >= 0; --i)
         {
             std::vector<uint8_t> bin = m_slice_vector[slice].oam[i].chr_export;
             std::vector<uint8_t> bin_v(bin.size());

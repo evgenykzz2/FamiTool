@@ -82,6 +82,17 @@ void MainWindow::on_edit_level_length_editingFinished()
             while (state.m_screen_tiles.size() < state.m_length)
                 state.m_screen_tiles.push_back(tile_vector);
         }
+    } else
+    {
+        if (state.m_screen_tiles.size() > state.m_length)
+            state.m_screen_tiles.resize(state.m_length);
+        else
+        {
+            std::vector<int> tile_vector;
+            tile_vector.resize(YUUREIKUN_WIDTH, 0x00);
+            while (state.m_screen_tiles.size() < state.m_length)
+                state.m_screen_tiles.push_back(tile_vector);
+        }
     }
 
     StatePush(state);

@@ -29,7 +29,7 @@ struct State
 
     std::map<int, Block> m_block_map;
     int m_block_map_index; //combo box item
-    //int m_block_tile_slot;
+    int m_transform_index; //combo box item
 
     std::map<int, TileSet> m_tileset_map;
     int m_tile_set_index; //combo box item
@@ -69,6 +69,7 @@ public:
     void BlockWnd_EventFilter(QObject* object, QEvent* event);
     void BlockWnd_RedrawBlock();
     void BlockWnd_RedrawTileset();
+    void BlockWnd_RedrawTransformBlock();
 
     void ChrWnd_Init();
     void ChrWnd_FullRedraw();
@@ -132,10 +133,10 @@ private slots:
     void on_checkBox_block_mark_used_tiles_clicked();
     void on_comboBox_level_type_currentIndexChanged(int index);
     void on_edit_level_length_editingFinished();
-
     void on_btn_id_move_up_clicked();
-
     void on_btn_export_chr_clicked();
+    void on_comboBox_transform_block_currentIndexChanged(int index);
+    void on_comboBox_draw_transformation_currentIndexChanged(int index);
 
 private:
     Ui::MainWindow *ui;

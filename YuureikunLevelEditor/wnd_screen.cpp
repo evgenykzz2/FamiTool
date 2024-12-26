@@ -19,6 +19,14 @@ void MainWindow::ScreenWnd_Init()
     ui->splitter_screen->setSizes(sizes);
     ui->label_screen_render->installEventFilter(this);
     ui->widget_screen_pattern->setVisible(ui->checkBox_screen_patter->isChecked());
+
+    ui->comboBox_draw_transformation->blockSignals(true);
+    ui->comboBox_draw_transformation->addItem("None");
+    ui->comboBox_draw_transformation->addItem("1");
+    ui->comboBox_draw_transformation->addItem("2");
+    ui->comboBox_draw_transformation->addItem("3");
+    ui->comboBox_draw_transformation->blockSignals(false);
+
 }
 
 void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
@@ -59,13 +67,25 @@ void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
                         ScreenWnd_RedrawScreen();
                     }
                 }
-            } else
+            } else if (state.m_level_type == LevelType_VerticalMoveDown)
             {
                 if (block_y < state.m_screen_tiles.size() && block_x < state.m_screen_tiles[block_y].size())
                 {
                     if (state.m_screen_tiles[block_y][block_x] != ui->listWidget_screen->currentRow())
                     {
                         state.m_screen_tiles[block_y][block_x] = ui->listWidget_screen->currentRow();
+                        StatePush(state);
+                        ScreenWnd_RedrawScreen();
+                    }
+                }
+            } else
+            {
+                int invy = state.m_screen_tiles.size() - 1 - block_y;
+                if (block_y < state.m_screen_tiles.size() && block_x < state.m_screen_tiles[invy].size())
+                {
+                    if (state.m_screen_tiles[invy][block_x] != ui->listWidget_screen->currentRow())
+                    {
+                        state.m_screen_tiles[invy][block_x] = ui->listWidget_screen->currentRow();
                         StatePush(state);
                         ScreenWnd_RedrawScreen();
                     }
@@ -213,6 +233,7 @@ void MainWindow::ScreenWnd_RedrawScreen()
     QImage tile_cach;
     int tile_cach_x = -1;
     int tile_cach_y = -1;
+    int draw_mode = ui->comboBox_draw_transformation->currentIndex();
 
     if (state.m_level_type == LevelType_Horizontal)
     {
@@ -234,9 +255,21 @@ void MainWindow::ScreenWnd_RedrawScreen()
                         continue;
                     if (block_y < 0 || block_y >= state.m_screen_tiles[block_x].size())
                         continue;
-                    int tileset_id = state.m_screen_tiles[block_x][block_y];
+                    int block_id = state.m_screen_tiles[block_x][block_y];
 
-                    auto itt = s_block_raw_image_map.find(tileset_id);
+                    if (draw_mode > 0)
+                    {
+                        int depth = draw_mode;
+                        while (depth > 0)
+                        {
+                            depth--;
+                            auto block_itt = state.m_block_map.find(block_id);
+                            if (block_itt != state.m_block_map.end() && block_itt->second.transform_index >= 0)
+                                block_id = block_itt->second.transform_index;
+                        }
+                    }
+
+                    auto itt = s_block_raw_image_map.find(block_id);
                     if (itt == s_block_raw_image_map.end())
                         continue;
 
@@ -259,6 +292,9 @@ void MainWindow::ScreenWnd_RedrawScreen()
             if (block_y < 0 || block_y >= state.m_screen_tiles.size())
                 continue;
 
+            if (state.m_level_type == LevelType_VerticalMoveUp)
+                block_y = state.m_screen_tiles.size() - 1 - block_y;
+
             for (int x = 0; x < image.width(); ++x)
             {
                 int world_x = x + ui->scroll_screen_h->value();
@@ -266,12 +302,22 @@ void MainWindow::ScreenWnd_RedrawScreen()
                 int pixel_x = world_x & 15;
                 if (block_x != tile_cach_x || block_y != tile_cach_y)
                 {
-
                     if (block_x < 0 || block_x >= state.m_screen_tiles[block_y].size())
                         continue;
-                    int tileset_id = state.m_screen_tiles[block_y][block_x];
+                    int block_id = state.m_screen_tiles[block_y][block_x];
+                    if (draw_mode > 0)
+                    {
+                        int depth = draw_mode;
+                        while (depth > 0)
+                        {
+                            depth--;
+                            auto block_itt = state.m_block_map.find(block_id);
+                            if (block_itt != state.m_block_map.end() && block_itt->second.transform_index >= 0)
+                                block_id = block_itt->second.transform_index;
+                        }
+                    }
 
-                    auto itt = s_block_raw_image_map.find(tileset_id);
+                    auto itt = s_block_raw_image_map.find(block_id);
                     if (itt == s_block_raw_image_map.end())
                         continue;
 
@@ -354,8 +400,6 @@ void MainWindow::ScreenWnd_RedrawScreen()
     ui->label_screen_render->setMaximumSize(scaled.size());
 }
 
-
-
 void MainWindow::on_checkBox_screen_patter_clicked()
 {
     ui->widget_screen_pattern->setVisible(ui->checkBox_screen_patter->isChecked());
@@ -373,3 +417,10 @@ void MainWindow::on_btn_screen_fill_clicked()
     StatePush(state);
     ScreenWnd_RedrawScreen();
 }
+
+
+void MainWindow::on_comboBox_draw_transformation_currentIndexChanged(int index)
+{
+    ScreenWnd_RedrawScreen();
+}
+

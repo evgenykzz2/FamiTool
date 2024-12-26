@@ -9,6 +9,13 @@
 #define YUUREIKUN_WIDTH 16
 #define YUUREIKUN_HEIGHT 11
 
+enum ETransformMode
+{
+    TransformMode_Damage = 0,
+    TransformMode_Bonus = 1,
+    TransformMode_Replace = 2
+};
+
 enum ECompression
 {
     Compression_None = 0,
@@ -65,6 +72,7 @@ struct Block
     int chrbank;
     int tile_x;
     int tile_y;
+    int transform_index;
 };
 
 
