@@ -39,6 +39,27 @@ enum ELevelType
     LevelType_VerticalMoveUp = 2,
 };
 
+enum EBlockLogic
+{
+    BlockLogic_None           = 0x00,
+
+    BlockLogic_BonusMoney     = 0x01,
+    BlockLogic_BonusHeart     = 0x02,
+    BlockLogic_BonusTime      = 0x03,
+    BlockLogic_BonusAttack    = 0x04,
+    BlockLogic_BonusBarier    = 0x05,
+    BlockLogic_BonusStairs    = 0x06,
+
+    BlockLogic_Water          = 0x40,
+    BlockLogic_FireDamage     = 0x41,
+    BlockLogic_LavaDamage     = 0x42,
+
+    BlockLogic_Obstacle       = 0x80,
+    BlockLogic_Distractible   = 0x81,
+    BlockLogic_SpikesUp       = 0x82,
+    BlockLogic_SpikesDown     = 0x83
+};
+
 struct OAM
 {
     int x;
@@ -73,6 +94,7 @@ struct Block
     int tile_x;
     int tile_y;
     int transform_index;
+    EBlockLogic block_logic;
 };
 
 

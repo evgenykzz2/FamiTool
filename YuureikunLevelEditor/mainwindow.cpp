@@ -328,6 +328,9 @@ void MainWindow::SaveProject(const QString &file_name)
                 if (itt->second.transform_index >= 0)
                     item_obj["transform"] = picojson::value( (double)(itt->second.transform_index) );
 
+                if (itt->second.block_logic != BlockLogic_None)
+                    item_obj["logic"] = picojson::value( (double)(itt->second.block_logic) );
+
                 item_obj["pal"] = picojson::value( (double)(itt->second.palette) );
                 if (!itt->second.overlay.isEmpty())
                     item_obj["overlay"] = picojson::value( itt->second.overlay.toUtf8().toBase64().data() );
@@ -526,6 +529,11 @@ void MainWindow::LoadProject(const QString &file_name)
             else
                 block.transform_index = -1;
 
+            if (itt->contains("logic"))
+                block.block_logic = (EBlockLogic)itt->get<picojson::object>()["logic"].get<double>();
+            else
+                block.block_logic = BlockLogic_None;
+
             block.palette = (int)itt->get<picojson::object>()["pal"].get<double>();
             if (itt->contains("overlay"))
             {
@@ -603,6 +611,7 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_tileset)
         TilesetWnd_FullRedraw();
 }
+
 
 
 

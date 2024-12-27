@@ -137,6 +137,7 @@ private slots:
     void on_btn_export_chr_clicked();
     void on_comboBox_transform_block_currentIndexChanged(int index);
     void on_comboBox_draw_transformation_currentIndexChanged(int index);
+    void on_comboBox_block_logic_currentIndexChanged(int index);
 
 private:
     Ui::MainWindow *ui;

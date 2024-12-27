@@ -21,6 +21,26 @@ void MainWindow::BlockWnd_Init()
     ui->comboBox_block_set_palette->addItem("3", QVariant((int)3));
     ui->label_block_set_view->installEventFilter(this);
 
+
+    ui->comboBox_block_logic->blockSignals(true);
+    ui->comboBox_block_logic->addItem("None", QVariant((int)BlockLogic_None));
+    ui->comboBox_block_logic->addItem("Bonus Money", QVariant((int)BlockLogic_BonusMoney));
+    ui->comboBox_block_logic->addItem("Bonus Heart", QVariant((int)BlockLogic_BonusHeart));
+    ui->comboBox_block_logic->addItem("Bonus Time", QVariant((int)BlockLogic_BonusTime));
+    ui->comboBox_block_logic->addItem("Bonus Attack", QVariant((int)BlockLogic_BonusAttack));
+    ui->comboBox_block_logic->addItem("Bonus Barier", QVariant((int)BlockLogic_BonusBarier));
+    ui->comboBox_block_logic->addItem("Bonus Stairs", QVariant((int)BlockLogic_BonusStairs));
+
+    ui->comboBox_block_logic->addItem("Water", QVariant((int)BlockLogic_Water));
+    ui->comboBox_block_logic->addItem("Fire Damage", QVariant((int)BlockLogic_FireDamage));
+    ui->comboBox_block_logic->addItem("Lava Damage", QVariant((int)BlockLogic_LavaDamage));
+
+    ui->comboBox_block_logic->addItem("Obstacle", QVariant((int)BlockLogic_Obstacle));
+    ui->comboBox_block_logic->addItem("Distractible", QVariant((int)BlockLogic_Distractible));
+    ui->comboBox_block_logic->addItem("SpikesUp", QVariant((int)BlockLogic_SpikesUp));
+    ui->comboBox_block_logic->addItem("SpikesDown", QVariant((int)BlockLogic_SpikesDown));
+    ui->comboBox_block_logic->blockSignals(false);
+
     s_block_tab_render = new QLabel();
     s_block_tab_render->move(0, 0);
     ui->scrollArea_block->setWidget(s_block_tab_render);
@@ -186,6 +206,7 @@ void MainWindow::on_btn_block_set_add_clicked()
     block.tile_x = 0;
     block.tile_y = 0;
     block.transform_index = -1;
+    block.block_logic = BlockLogic_None;
     block.tileset = ui->comboBox_block_tileset->itemData(ui->comboBox_block_tileset->currentIndex()).toInt();
     block.chrbank = ui->comboBox_block_chrbank->itemData(ui->comboBox_block_chrbank->currentIndex()).toInt();
 
@@ -282,6 +303,17 @@ void MainWindow::BlockWnd_RedrawTransformBlock()
     }
     ui->comboBox_transform_block->blockSignals(false);
 
+
+    ui->comboBox_transform_block->blockSignals(true);
+    for (int i = 0; i < ui->comboBox_block_logic->count(); ++i)
+    {
+        if (ui->comboBox_block_logic->itemData(i).toInt() == itt->second.block_logic)
+        {
+            ui->comboBox_block_logic->setCurrentIndex(i);
+            break;
+        }
+    }
+    ui->comboBox_block_logic->blockSignals(false);
 }
 
 void MainWindow::BlockWnd_RedrawTileset()
@@ -786,5 +818,18 @@ void MainWindow::on_comboBox_transform_block_currentIndexChanged(int index)
 
     block_itt->second.transform_index = ui->comboBox_transform_block->itemData(ui->comboBox_transform_block->currentIndex()).toInt();
     StatePush(state);
-    BlockWnd_RedrawTransformBlock();
 }
+
+void MainWindow::on_comboBox_block_logic_currentIndexChanged(int index)
+{
+    State state = m_state.back();
+    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
+
+    auto block_itt = state.m_block_map.find(block_id);
+    if (block_itt == state.m_block_map.end())
+        return;
+
+    block_itt->second.block_logic = (EBlockLogic)ui->comboBox_block_logic->itemData(ui->comboBox_block_logic->currentIndex()).toInt();
+    StatePush(state);
+}
+
