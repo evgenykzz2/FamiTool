@@ -36,7 +36,8 @@ void MainWindow::BlockWnd_Init()
     ui->comboBox_block_logic->addItem("Lava Damage", QVariant((int)BlockLogic_LavaDamage));
 
     ui->comboBox_block_logic->addItem("Obstacle", QVariant((int)BlockLogic_Obstacle));
-    ui->comboBox_block_logic->addItem("Distractible", QVariant((int)BlockLogic_Distractible));
+    ui->comboBox_block_logic->addItem("Dist-Craks", QVariant((int)BlockLogic_Distractible));
+    ui->comboBox_block_logic->addItem("Dist-Break", QVariant((int)BlockLogic_Distractible2));
     ui->comboBox_block_logic->addItem("SpikesUp", QVariant((int)BlockLogic_SpikesUp));
     ui->comboBox_block_logic->addItem("SpikesDown", QVariant((int)BlockLogic_SpikesDown));
     ui->comboBox_block_logic->blockSignals(false);
@@ -72,14 +73,6 @@ void MainWindow::BlockWnd_FullRedraw()
     ui->comboBox_block_set->setCurrentIndex(state.m_block_map_index);
     ui->comboBox_block_set->blockSignals(false);
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
-
-    ui->comboBox_transform_block->blockSignals(true);
-    ui->comboBox_transform_block->clear();
-    ui->comboBox_transform_block->addItem("-None-", QVariant(-1));
-    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt )
-        ui->comboBox_transform_block->addItem(itt->second.name, QVariant(itt->first));
-    ui->comboBox_transform_block->blockSignals(false);
-
 
     BlockWnd_RedrawTransformBlock();
     BlockWnd_RedrawTileset();
@@ -179,11 +172,6 @@ void MainWindow::on_lineEdit_block_set_editingFinished()
     itt->second.name = ui->lineEdit_block_set->text();
     ui->comboBox_block_set->setItemText(state.m_block_map_index,  ui->lineEdit_block_set->text());
 
-    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
-    {
-        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->first)
-            ui->comboBox_transform_block->setItemText(i,  ui->lineEdit_block_set->text());
-    }
     StatePush(state);
 }
 
@@ -205,7 +193,6 @@ void MainWindow::on_btn_block_set_add_clicked()
     block.palette = ui->comboBox_block_set_palette->itemData(ui->comboBox_block_set_palette->currentIndex()).toInt();
     block.tile_x = 0;
     block.tile_y = 0;
-    block.transform_index = -1;
     block.block_logic = BlockLogic_None;
     block.tileset = ui->comboBox_block_tileset->itemData(ui->comboBox_block_tileset->currentIndex()).toInt();
     block.chrbank = ui->comboBox_block_chrbank->itemData(ui->comboBox_block_chrbank->currentIndex()).toInt();
@@ -218,10 +205,6 @@ void MainWindow::on_btn_block_set_add_clicked()
     state.m_block_map_index = ui->comboBox_block_set->count()-1;
     ui->comboBox_block_set->blockSignals(false);
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
-
-    ui->comboBox_transform_block->blockSignals(true);
-    ui->comboBox_transform_block->addItem(block.name, QVariant(found_id));
-    ui->comboBox_transform_block->blockSignals(false);
 
     StatePush(state);
     BlockWnd_RedrawTransformBlock();
@@ -242,15 +225,6 @@ void MainWindow::on_btn_block_set_remove_clicked()
     state.m_block_map_index = ui->comboBox_block_set->currentIndex();
     ui->comboBox_block_set->blockSignals(false);
     ui->lineEdit_block_set->setText(ui->comboBox_block_set->currentText());
-
-    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
-    {
-        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->first)
-        {
-            ui->comboBox_transform_block->removeItem(i);
-            break;
-        }
-    }
 
     StatePush(state);
     BlockWnd_RedrawTransformBlock();
@@ -291,20 +265,7 @@ void MainWindow::BlockWnd_RedrawTransformBlock()
     if (itt == state.m_block_map.end())
         return;
 
-    ui->comboBox_transform_block->blockSignals(true);
-    ui->comboBox_transform_block->setCurrentIndex(0);   //-None-
-    for (int i = 0; i < ui->comboBox_transform_block->count(); ++i)
-    {
-        if (ui->comboBox_transform_block->itemData(i).toInt() == itt->second.transform_index)
-        {
-            ui->comboBox_transform_block->setCurrentIndex(i);
-            break;
-        }
-    }
-    ui->comboBox_transform_block->blockSignals(false);
-
-
-    ui->comboBox_transform_block->blockSignals(true);
+    ui->comboBox_block_logic->blockSignals(true);
     for (int i = 0; i < ui->comboBox_block_logic->count(); ++i)
     {
         if (ui->comboBox_block_logic->itemData(i).toInt() == itt->second.block_logic)
@@ -794,11 +755,22 @@ void MainWindow::on_btn_id_move_up_clicked()
         for (size_t x = 0; x < state.m_screen_tiles[y].size(); ++x)
         {
             if (state.m_screen_tiles[y][x] == block_itt->first)
-            {
                 state.m_screen_tiles[y][x] = block_itt_prev->first;
-            } else if (state.m_screen_tiles[y][x] == block_itt_prev->first)
-            {
+            else if (state.m_screen_tiles[y][x] == block_itt_prev->first)
                 state.m_screen_tiles[y][x] = block_itt->first;
+        }
+    }
+
+    for (size_t depth = 0; depth < 3; ++depth)
+    {
+        for (size_t y = 0; y < state.m_depth_tiles[depth].size(); ++y)
+        {
+            for (size_t x = 0; x < state.m_depth_tiles[depth][y].size(); ++x)
+            {
+                if (state.m_depth_tiles[depth][y][x] == block_itt->first)
+                    state.m_depth_tiles[depth][y][x] = block_itt_prev->first;
+                else if (state.m_depth_tiles[depth][y][x] == block_itt_prev->first)
+                    state.m_depth_tiles[depth][y][x] = block_itt->first;
             }
         }
     }
@@ -807,18 +779,6 @@ void MainWindow::on_btn_id_move_up_clicked()
     BlockWnd_FullRedraw();
 }
 
-void MainWindow::on_comboBox_transform_block_currentIndexChanged(int index)
-{
-    State state = m_state.back();
-    int block_id = ui->comboBox_block_set->itemData(state.m_block_map_index).toInt();
-
-    auto block_itt = state.m_block_map.find(block_id);
-    if (block_itt == state.m_block_map.end())
-        return;
-
-    block_itt->second.transform_index = ui->comboBox_transform_block->itemData(ui->comboBox_transform_block->currentIndex()).toInt();
-    StatePush(state);
-}
 
 void MainWindow::on_comboBox_block_logic_currentIndexChanged(int index)
 {

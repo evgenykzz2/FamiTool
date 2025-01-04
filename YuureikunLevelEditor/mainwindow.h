@@ -29,12 +29,13 @@ struct State
 
     std::map<int, Block> m_block_map;
     int m_block_map_index; //combo box item
-    int m_transform_index; //combo box item
 
     std::map<int, TileSet> m_tileset_map;
     int m_tile_set_index; //combo box item
 
     std::vector< std::vector<int> > m_screen_tiles;
+    std::vector< std::vector<int> > m_depth_tiles[3];
+    std::vector<std::pair<int, int>> m_event;
 };
 
 class MainWindow : public QMainWindow
@@ -82,8 +83,10 @@ public:
     void ScreenWnd_FullRedraw();
     void ScreenWnd_RedrawScreen();
     void ScreenWnd_EventFilter(QObject* object, QEvent* event);
+    void ScreenWnd_ValidateDepth(State &state, int x, int y);
 
-    void Export_SpriteConvert();
+    void CalculateScroll();
+    void Export_TransformationCalc(State &state, std::vector<Block> &export_blocks, std::vector<int> &block_transform, std::vector<std::vector<int>> &export_block_map, std::vector<int> &block_original);
     void Export_Buffer(std::stringstream &stream, const void* data, size_t size);
 protected:
     virtual bool eventFilter(QObject* object, QEvent* event);
@@ -135,9 +138,14 @@ private slots:
     void on_edit_level_length_editingFinished();
     void on_btn_id_move_up_clicked();
     void on_btn_export_chr_clicked();
-    void on_comboBox_transform_block_currentIndexChanged(int index);
     void on_comboBox_draw_transformation_currentIndexChanged(int index);
     void on_comboBox_block_logic_currentIndexChanged(int index);
+    void on_btn_export_block_logic_clicked();
+    void on_edit_calc_x_editingFinished();
+    void on_edit_calc_y_editingFinished();
+    void on_edit_calc_n_editingFinished();
+
+    void on_checkBox_events_clicked();
 
 private:
     Ui::MainWindow *ui;

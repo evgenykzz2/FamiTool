@@ -483,13 +483,18 @@ void MainWindow::on_pushButton_export_clicked()
 
 void MainWindow::on_btn_export_blocks_clicked()
 {
-    std::map<int, TChrRender> chr_map = ChrWnd_GetTileMap();
-
     QString file_name = QFileDialog::getSaveFileName(this, "Export blocks", "", "*.inc");
     if (file_name.isEmpty())
         return;
 
     State state = m_state.back();
+    std::vector<Block> export_blocks;
+    std::vector<int> block_transform;
+    std::vector<std::vector<int>> export_block_map;
+    std::vector<int> block_original;
+    Export_TransformationCalc(state, export_blocks, block_transform, export_block_map, block_original);
+
+    std::map<int, TChrRender> chr_map = ChrWnd_GetTileMap();
 
     std::map<int, int> block_index[4];
     for (auto itt = chr_map.begin(); itt != chr_map.end(); ++itt)
@@ -513,8 +518,10 @@ void MainWindow::on_btn_export_blocks_clicked()
     {
         int pos = 0;
         stream << state.m_name.toStdString() << "_block_tiles_" << std::dec << tile << ":" << std::endl;
-        for (auto itt = block_index[tile].begin(); itt != block_index[tile].end(); ++itt)
+        //for (auto itt = block_index[tile].begin(); itt != block_index[tile].end(); ++itt)
+        for (size_t n = 0; n < block_original.size(); ++n)
         {
+            auto itt = block_index[tile].find(block_original[n]);
             if (pos == 0)
                 stream << "  .db";
             else
@@ -523,7 +530,7 @@ void MainWindow::on_btn_export_blocks_clicked()
             ++pos;
             auto next = itt;
             ++next;
-            if (pos == 16 || next == block_index[tile].end())
+            if (pos == 16 || n+1 == block_original.size())
             {
                 stream << std::endl;
                 pos = 0;
@@ -532,14 +539,26 @@ void MainWindow::on_btn_export_blocks_clicked()
         stream << std::endl;
     }
 
-    stream << state.m_name.toStdString() << "_block_palette:" << std::endl;
-    int n = 0;
-    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
     {
-        stream << "  .db $" << std::hex << std::setw(2) << std::setfill('0')
-               << (uint16_t)(itt->second.palette | (itt->second.palette << 2) | (itt->second.palette << 4) | (itt->second.palette << 6))
-               << std::endl;
-        ++n;
+        stream << state.m_name.toStdString() << "_block_palette:" << std::endl;
+        int pos = 0;
+        for (size_t n = 0; n < export_blocks.size(); ++n)
+        {
+            uint8_t p = export_blocks[n].palette;
+            if (pos == 0)
+                stream << "  .db";
+            else
+                stream << ",";
+            stream << " $" << std::hex << std::setw(2) << std::setfill('0')
+                   << (uint16_t)(p | (p << 2) | (p << 4) | (p << 6));
+            ++pos;
+            if (pos == 16 || n+1 == export_blocks.size())
+            {
+                stream << std::endl;
+                pos = 0;
+            }
+        }
+        stream << std::endl;
     }
 
     QFile file(file_name);
@@ -554,7 +573,13 @@ void MainWindow::on_btn_export_stage_clicked()
     QString file_name = QFileDialog::getSaveFileName(this, "Export stage", "", "*.inc");
     if (file_name.isEmpty())
         return;
+
     State state = m_state.back();
+    std::vector<Block> export_blocks;
+    std::vector<int> block_transform;
+    std::vector<std::vector<int>> export_block_map;
+    std::vector<int> block_original;
+    Export_TransformationCalc(state, export_blocks, block_transform, export_block_map, block_original);
 
 
     std::stringstream stream;
@@ -573,24 +598,26 @@ void MainWindow::on_btn_export_stage_clicked()
     stream << "  ;7: palette" << std::endl;
     stream << "  .db low(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
     stream << "  .db high(" << state.m_name.toStdString() << "_block_palette)" << std::endl;
-    stream << "  ;9: block flags" << std::endl;
-    stream << "  .db 0" << std::endl;
-    stream << "  .db 0" << std::endl;
-    stream << "  ;B: row event" << std::endl;
+    stream << "  ;9: block logic" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_block_logic)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_block_logic)" << std::endl;
+    stream << "  ;B: block transform" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_block_transform)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_block_transform)" << std::endl;
+    stream << "  ;D: row event" << std::endl;
     stream << "  .db 0, 0" << std::endl;
     stream << std::endl;
 
-
     stream << state.m_name.toStdString() << "_map:" << std::endl;
-    for (size_t n = 0; n < state.m_screen_tiles.size(); ++n)
+    for (size_t n = 0; n < export_block_map.size(); ++n)
     {
         stream << "  .db ";
-        for (int x = 0; x < state.m_screen_tiles[n].size(); ++x)
+        for (int x = 0; x < export_block_map[n].size(); ++x)
         {
             if (x != 0)
                 stream << ",";
             stream << "$" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
-                   << (uint16_t)state.m_screen_tiles[n][x];
+                   << (uint16_t)export_block_map[n][x];
         }
         stream << std::endl;
     }
@@ -606,7 +633,7 @@ void MainWindow::on_btn_export_chr_clicked()
 {
     std::map<int, TChrRender> chr_map = ChrWnd_GetTileMap();
 
-    ECompression compresion = (ECompression)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt();
+    //ECompression compresion = (ECompression)ui->comboBox_compression->itemData(ui->comboBox_compression->currentIndex()).toInt();
     EChrAlign align = (EChrAlign)ui->comboBox_chr_align->itemData(ui->comboBox_chr_align->currentIndex()).toInt();
 
     size_t align_size = 0;
@@ -640,4 +667,174 @@ void MainWindow::on_btn_export_chr_clicked()
         file.write((const char*)chr.data(), chr.size());
         file.close();
     }
+}
+
+
+void MainWindow::on_btn_export_block_logic_clicked()
+{
+    QString file_name = QFileDialog::getSaveFileName(this, "Export blocks logic", "", "*.inc");
+    if (file_name.isEmpty())
+        return;
+
+    State state = m_state.back();
+    std::vector<Block> export_blocks;
+    std::vector<int> block_transform;
+    std::vector<std::vector<int>> export_block_map;
+    std::vector<int> block_original;
+    Export_TransformationCalc(state, export_blocks, block_transform, export_block_map, block_original);
+
+    std::stringstream stream;
+    {
+        stream << state.m_name.toStdString() << "_block_logic:" << std::endl;
+        int pos = 0;
+        for (size_t n = 0; n < export_blocks.size(); ++n)
+        {
+            if (pos == 0)
+                stream << "  .db";
+            else
+                stream << ",";
+            stream << " $" << std::hex << std::setw(2) << std::setfill('0') << (uint16_t)export_blocks[n].block_logic;
+            ++pos;
+            if (pos == 16 || n+1 == export_blocks.size())
+            {
+                stream << std::endl;
+                pos = 0;
+            }
+        }
+        stream << std::endl;
+    }
+
+    {
+        stream << state.m_name.toStdString() << "_block_transform:" << std::endl;
+        int pos = 0;
+        for (size_t n = 0; n < export_blocks.size(); ++n)
+        {
+            if (pos == 0)
+                stream << "  .db";
+            else
+                stream << ",";
+            stream << " $" << std::hex << std::setw(2) << std::setfill('0') << (uint16_t)block_transform[n];
+            ++pos;
+            if (pos == 16 || n+1 == export_blocks.size())
+            {
+                stream << std::endl;
+                pos = 0;
+            }
+        }
+        stream << std::endl;
+    }
+
+    QFile file(file_name);
+    file.open(QFile::WriteOnly);
+    file.write((const char*)stream.str().c_str(), stream.str().size());
+    file.close();
+}
+
+void MainWindow::Export_TransformationCalc(State &state, std::vector<Block> &export_blocks, std::vector<int> &block_transform,
+                                           std::vector<std::vector<int>> &export_block_map, std::vector<int> &block_original)
+{
+    std::map<std::vector<int>, int> transform_map;
+    std::vector<std::vector<int>> transform_vector;
+
+    for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
+    {
+        block_transform.push_back(export_blocks.size());    //transform to self
+        export_blocks.push_back(itt->second);
+        block_original.push_back(itt->first);
+    }
+
+    for (size_t y = 0; y != state.m_screen_tiles.size(); ++y)
+    {
+        std::vector<int> block_line;
+        for (size_t x = 0; x != state.m_screen_tiles[y].size(); ++x)
+        {
+            if (state.m_depth_tiles[0][y][x] < 0)
+            {
+                block_line.push_back(state.m_screen_tiles[y][x]);
+            } else
+            {
+                std::vector<int> tr;
+                tr.push_back(state.m_screen_tiles[y][x]);
+                tr.push_back(state.m_depth_tiles[0][y][x]);
+                if (state.m_depth_tiles[1][y][x] >= 0)
+                {
+                    tr.push_back(state.m_depth_tiles[1][y][x]);
+                    if (state.m_depth_tiles[2][y][x] >= 0)
+                        tr.push_back(state.m_depth_tiles[2][y][x]);
+                }
+
+                //Create blocks
+                int block_id_result = state.m_screen_tiles[y][x];
+                int block_target = tr[tr.size() - 1];
+                for (size_t len = 2; len <= tr.size(); ++len)
+                {
+                    std::vector<int> tr_cut;
+                    for (size_t n = 0; n < len; ++n)
+                        tr_cut.push_back(tr[tr.size() - len + n]);
+                    auto itt = transform_map.find(tr_cut);
+                    if (itt == transform_map.end())
+                    {
+                        Block new_block = export_blocks[tr_cut[0]];
+                        new_block.name = "";
+                        for (size_t n = 0; n < len; ++n)
+                        {
+                            if (n > 0)
+                                new_block.name += ">";
+                            new_block.name += export_blocks[tr[tr.size() - len + n]].name;
+                        }
+                        if (new_block.block_logic == BlockLogic_Obstacle)
+                        {
+                            if (len == tr.size())
+                                new_block.block_logic = BlockLogic_Distractible;
+                            else
+                                new_block.block_logic = BlockLogic_Distractible2;
+                        }
+                        int id = export_blocks.size();
+                        transform_map.insert(std::make_pair(tr_cut, id));
+                        export_blocks.push_back(new_block);
+                        block_transform.push_back(block_target);
+                        block_original.push_back(tr_cut[0]);
+                        //qDebug() << id << new_block.name << " : " << export_blocks[block_target].name;
+                        block_target = id;
+                        block_id_result = id;
+                    } else
+                    {
+                        block_target = itt->second;
+                        block_id_result = itt->second;
+                    }
+                }
+                block_line.push_back(block_id_result);
+            }
+        }
+        export_block_map.push_back(block_line);
+    }
+}
+
+void MainWindow::CalculateScroll()
+{
+    int x = ui->edit_calc_x->text().toInt();
+    int y = ui->edit_calc_y->text().toInt();
+    int n = ui->edit_calc_n->text().toInt();
+
+    int d0 = ((y & 0xC0) >> 6) | ((y & 0x03) << 4) | (n << 2);
+    int d1 = y;
+    int d2 = x;
+    int d3 = ((x & 0xF8) >> 3) | ((y & 0x38) << 2);
+
+    ui->edit_calc_result->setText(QString("$%1; $%2; $%3; $%4").arg(d0, 0, 16, QChar('0')).arg(d1, 0, 16, QChar('0')).arg(d2, 0, 16, QChar('0')).arg(d3, 0, 16, QChar('0')) );
+}
+
+void MainWindow::on_edit_calc_x_editingFinished()
+{
+    CalculateScroll();
+}
+
+void MainWindow::on_edit_calc_y_editingFinished()
+{
+    CalculateScroll();
+}
+
+void MainWindow::on_edit_calc_n_editingFinished()
+{
+    CalculateScroll();
 }

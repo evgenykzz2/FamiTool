@@ -1,5 +1,20 @@
 #include "Sprite.h"
 
+bool BlockLogicCanTransform(EBlockLogic logic)
+{
+    if (   logic == BlockLogic_BonusMoney
+        || logic == BlockLogic_BonusHeart
+        || logic == BlockLogic_BonusTime
+        || logic == BlockLogic_BonusAttack
+        || logic == BlockLogic_BonusBarier
+        || logic == BlockLogic_BonusStairs
+        || logic == BlockLogic_Distractible
+        || logic == BlockLogic_Distractible2)
+        return true;
+    else
+        return false;
+}
+
 QImage ChrRender(const void* chr, int tile_width, int tile_height, int tile_zoom, const uint32_t *color)
 {
     QImage image(tile_width*8, tile_height*8, QImage::Format_ARGB32);

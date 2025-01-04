@@ -74,24 +74,45 @@ void MainWindow::on_edit_level_length_editingFinished()
     if (state.m_level_type == LevelType_Horizontal)
     {
         if (state.m_screen_tiles.size() > state.m_length)
+        {
             state.m_screen_tiles.resize(state.m_length);
-        else
+            for (size_t depth = 0; depth < 3; ++depth)
+                state.m_depth_tiles[depth].resize(state.m_length);
+        } else
         {
             std::vector<int> tile_vector;
             tile_vector.resize(YUUREIKUN_HEIGHT, 0x00);
             while (state.m_screen_tiles.size() < state.m_length)
                 state.m_screen_tiles.push_back(tile_vector);
+
+            for (size_t depth = 0; depth < 3; ++depth)
+            {
+                std::vector<int> tile_vector;
+                tile_vector.resize(YUUREIKUN_HEIGHT, -1);
+                while (state.m_depth_tiles[depth].size() < state.m_length)
+                    state.m_depth_tiles[depth].push_back(tile_vector);
+            }
         }
     } else
     {
         if (state.m_screen_tiles.size() > state.m_length)
+        {
             state.m_screen_tiles.resize(state.m_length);
-        else
+            for (size_t depth = 0; depth < 3; ++depth)
+                state.m_depth_tiles[depth].resize(state.m_length);
+        } else
         {
             std::vector<int> tile_vector;
             tile_vector.resize(YUUREIKUN_WIDTH, 0x00);
             while (state.m_screen_tiles.size() < state.m_length)
                 state.m_screen_tiles.push_back(tile_vector);
+            for (size_t depth = 0; depth < 3; ++depth)
+            {
+                std::vector<int> tile_vector;
+                tile_vector.resize(YUUREIKUN_WIDTH, -1);
+                while (state.m_depth_tiles[depth].size() < state.m_length)
+                    state.m_depth_tiles[depth].push_back(tile_vector);
+            }
         }
     }
 

@@ -39,6 +39,23 @@ enum ELevelType
     LevelType_VerticalMoveUp = 2,
 };
 
+enum EEvent
+{
+    Event_None = 0,
+    Event_CheckPoint = 1,
+    Event_Reserve0 = 2,
+    Event_Reserve1 = 3,
+    Event_Reserve2 = 4,
+
+    Event_Level1_Crow = 5,
+    Event_Level1_DarkDevil = 6,
+    Event_Level1_HumanSoul = 7,
+    Event_Level1_BambooShoot = 8,
+    Event_Level1_BambooLeaf = 9,
+    Event_Level1_BossBrick = 10,
+    Event_Level1_BossFace = 11,
+};
+
 enum EBlockLogic
 {
     BlockLogic_None           = 0x00,
@@ -55,10 +72,13 @@ enum EBlockLogic
     BlockLogic_LavaDamage     = 0x42,
 
     BlockLogic_Obstacle       = 0x80,
-    BlockLogic_Distractible   = 0x81,
-    BlockLogic_SpikesUp       = 0x82,
-    BlockLogic_SpikesDown     = 0x83
+    BlockLogic_Distractible   = 0x81,   //Make cracks
+    BlockLogic_Distractible2  = 0x82,   //Break on parts
+    BlockLogic_SpikesUp       = 0x83,
+    BlockLogic_SpikesDown     = 0x84
 };
+
+bool BlockLogicCanTransform(EBlockLogic logic);
 
 struct OAM
 {
@@ -93,7 +113,6 @@ struct Block
     int chrbank;
     int tile_x;
     int tile_y;
-    int transform_index;
     EBlockLogic block_logic;
 };
 

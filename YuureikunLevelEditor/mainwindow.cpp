@@ -35,9 +35,6 @@ MainWindow::MainWindow(QWidget *parent)
     state.m_palette_map_index = 0;
     state.m_chr_map_index = 0;
     state.m_block_map_index = 0;
-    state.m_transform_index = 0;
-    //state.m_block_chr1 = 0;
-    //state.m_block_chr0 = 0;
     state.m_tile_set_index = 0;
     m_state.push_back(state);
 
@@ -47,25 +44,6 @@ MainWindow::MainWindow(QWidget *parent)
     ChrWnd_Init();
     BlockWnd_Init();
     ScreenWnd_Init();
-
-    //-------------------------------------------------------------------------------
-    //m_attribute_tab_zoom = 1;
-    //s_attribute_tab_render = new QLabel();
-    //s_attribute_tab_render->move(0, 0);
-    //ui->scrollArea_attribute->setWidget(s_attribute_tab_render);
-    //s_attribute_tab_render->installEventFilter(this);
-    //s_attribute_tab_render->setMouseTracking(true);
-    //ui->scrollArea_attribute->installEventFilter(this);
-
-    //-------------------------------------------------------------------------------
-    //m_oam_tab_zoom = 8;
-    //s_oam_tab_render = new QLabel();
-    //s_oam_tab_render->move(0, 0);
-    //ui->scrollArea_OAM->setWidget(s_oam_tab_render);
-    //s_oam_tab_render->installEventFilter(this);
-    //s_oam_tab_render->setMouseTracking(true);
-    //ui->scrollArea_OAM->installEventFilter(this);
-    //m_oam_selected = -1;
 
     //-------------------------------------------------------------------------------
     ui->comboBox_compression->blockSignals(true);
@@ -132,30 +110,6 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
     if (event->type() == QEvent::MouseButtonPress)
     {
     }
-
-    //if (object == ui->scrollArea_attribute)
-    //{
-    //    if (event->type() == QEvent::KeyPress)
-    //    {
-    //        QKeyEvent* key = static_cast<QKeyEvent*>(event);
-    //        if(key->key() == Qt::Key_Plus)
-    //        {
-    //            m_attribute_tab_zoom ++;
-    //            if (m_attribute_tab_zoom > 4)
-    //                m_attribute_tab_zoom = 4;
-    //            else
-    //                RedrawAttributeTab();
-    //        }
-    //        if(key->key() == Qt::Key_Minus)
-    //        {
-    //            m_attribute_tab_zoom --;
-    //            if (m_attribute_tab_zoom < 1)
-    //                m_attribute_tab_zoom = 1;
-    //            else
-    //                RedrawAttributeTab();
-    //        }
-    //    }
-    //}
 
     return QWidget::eventFilter( object, event );
 }
@@ -310,7 +264,6 @@ void MainWindow::SaveProject(const QString &file_name)
 
     {
         json.get<picojson::object>()["block_map_index"] = picojson::value( (double)state.m_block_map_index );
-        json.get<picojson::object>()["block_transform_index"] = picojson::value( (double)state.m_transform_index );
         picojson::array items = picojson::array();
         for (auto itt = state.m_block_map.begin(); itt != state.m_block_map.end(); ++itt)
         {
@@ -325,9 +278,6 @@ void MainWindow::SaveProject(const QString &file_name)
                 item_obj["tile_x"] = picojson::value( (double)(itt->second.tile_x) );
                 item_obj["tile_y"] = picojson::value( (double)(itt->second.tile_y) );
 
-                if (itt->second.transform_index >= 0)
-                    item_obj["transform"] = picojson::value( (double)(itt->second.transform_index) );
-
                 if (itt->second.block_logic != BlockLogic_None)
                     item_obj["logic"] = picojson::value( (double)(itt->second.block_logic) );
 
@@ -339,16 +289,45 @@ void MainWindow::SaveProject(const QString &file_name)
         json.get<picojson::object>()["block_map"] = picojson::value(items);
     }
 
+    for (size_t n = 0; n < state.m_screen_tiles.size(); ++n)
     {
-        for (size_t n = 0; n < state.m_screen_tiles.size(); ++n)
+        picojson::object item_obj;
+        QString name = QString("st%1").arg(n, 3, 10, QLatin1Char('0'));
+        std::stringstream stream;
+        for (int x = 0; x < state.m_screen_tiles[n].size(); ++x)
+            stream << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << (((uint32_t)state.m_screen_tiles[n][x])&255);
+        json.get<picojson::object>()[name.toLocal8Bit().data()] = picojson::value(stream.str());
+    }
+
+    for (size_t depth = 0; depth < 3; ++depth)
+    {
+        for (size_t n = 0; n < state.m_depth_tiles[depth].size(); ++n)
         {
             picojson::object item_obj;
-            QString name = QString("st%1").arg(n, 3, 10, QLatin1Char('0'));
+            QString name;
+            if (depth == 0)
+                name = QString("da%1").arg(n, 3, 10, QLatin1Char('0'));
+            else if (depth == 1)
+                name = QString("db%1").arg(n, 3, 10, QLatin1Char('0'));
+            else
+                name = QString("dc%1").arg(n, 3, 10, QLatin1Char('0'));
             std::stringstream stream;
-            for (int x = 0; x < state.m_screen_tiles[n].size(); ++x)
-                stream << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << (((uint32_t)state.m_screen_tiles[n][x])&255);
+            for (int x = 0; x < state.m_depth_tiles[depth][n].size(); ++x)
+            {
+                if (state.m_depth_tiles[depth][n][x] < 0)
+                    stream << "XX";
+                else
+                    stream << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << (((uint32_t)state.m_depth_tiles[depth][n][x])&255);
+            }
             json.get<picojson::object>()[name.toLocal8Bit().data()] = picojson::value(stream.str());
         }
+    }
+
+    for (size_t n = 0; n < state.m_event.size(); ++n)
+    {
+        QString name = QString("ev%1").arg(n, 3, 10, QLatin1Char('0'));
+        QString param = QString("%1%2").arg(state.m_event[n].first, 2, 16, QChar('0')).arg(state.m_event[n].second, 2, 16, QChar('0'));
+        json.get<picojson::object>()[name.toLocal8Bit().data()] = picojson::value(param.toStdString());
     }
 
     QString json_str = QString::fromStdString(json.serialize(true));
@@ -477,21 +456,6 @@ void MainWindow::LoadProject(const QString &file_name)
         }
     }
 
-    /*if (json.contains("block_chr0"))
-        state.m_block_chr0 = json.get<picojson::object>()["block_chr0"].get<double>();
-    else
-        state.m_block_chr0 = 0;
-
-    if (json.contains("block_chr1"))
-        state.m_block_chr1 = json.get<picojson::object>()["block_chr1"].get<double>();
-    else
-        state.m_block_chr1 = 0;*/
-
-    if (json.contains("block_transform_index"))
-        state.m_transform_index = json.get<picojson::object>()["block_transform_index"].get<double>();
-    else
-        state.m_transform_index = 0;
-
     if (json.contains("block_map_index"))
         state.m_block_map_index = json.get<picojson::object>()["block_map_index"].get<double>();
     else
@@ -523,11 +487,6 @@ void MainWindow::LoadProject(const QString &file_name)
                 block.tile_y = itt->get<picojson::object>()["tile_y"].get<double>();
             else
                 block.tile_y = 0;
-
-            if (itt->contains("transform"))
-                block.transform_index = itt->get<picojson::object>()["transform"].get<double>();
-            else
-                block.transform_index = -1;
 
             if (itt->contains("logic"))
                 block.block_logic = (EBlockLogic)itt->get<picojson::object>()["logic"].get<double>();
@@ -590,6 +549,70 @@ void MainWindow::LoadProject(const QString &file_name)
         state.m_screen_tiles.push_back(tile_vector);
     }
 
+    for (int depth = 0; depth < 3; ++depth)
+    {
+        for (size_t n = 0; n < state.m_length; ++n)
+        {
+            QString name;
+            if (depth == 0)
+                name = QString("da%1").arg(n, 3, 10, QLatin1Char('0'));
+            else if (depth == 1)
+                name = QString("db%1").arg(n, 3, 10, QLatin1Char('0'));
+            else
+                name = QString("dc%1").arg(n, 3, 10, QLatin1Char('0'));
+            std::vector<int> tile_vector;
+            if (state.m_level_type == LevelType_Horizontal)
+                tile_vector.resize(YUUREIKUN_HEIGHT, -1);
+            else
+                tile_vector.resize(YUUREIKUN_WIDTH, -1);
+
+            if (json.contains(name.toLocal8Bit().data()))
+            {
+                std::string line = json.get<picojson::object>()[name.toLocal8Bit().data()].get<std::string>();
+                for (int x = 0; x < tile_vector.size(); ++x)
+                {
+                    int v = 0;
+                    if (line[x*2+0] == 'X' && line[x*2+1] == 'X')
+                    {
+                        v = -1;
+                    } else
+                    {
+                        if (line[x*2+0] >= '0' && line[x*2+0] <= '9')
+                            v = (line[x*2+0]-'0') << 4;
+                        else if (line[x*2+0] >= 'A' && line[x*2+0] <= 'F')
+                            v = ((line[x*2+0]-'A') + 0xA) << 4;
+
+                        if (line[x*2+1] >= '0' && line[x*2+1] <= '9')
+                            v |= (line[x*2+1]-'0');
+                        else if (line[x*2+1] >= 'A' && line[x*2+1] <= 'F')
+                            v |= ((line[x*2+1]-'A') + 0xA);
+                    }
+                    tile_vector[x] = v;
+                }
+            }
+            state.m_depth_tiles[depth].push_back(tile_vector);
+        }
+    }
+
+    state.m_event.resize(0);
+    for (size_t n = 0; n < state.m_length; ++n)
+    {
+        QString name = QString("ev%1").arg(n, 3, 10, QLatin1Char('0'));
+        int a = 0;
+        int b = 0;
+        if (json.contains(name.toLocal8Bit().data()))
+        {
+            std::string line = json.get<picojson::object>()[name.toLocal8Bit().data()].get<std::string>();
+            std::string event = line.substr(0, 2);
+            if (event.length() == 2)
+                a = QString::fromStdString(event).toInt(0, 16);
+            std::string param = line.substr(2, 2);
+            if (param.length() == 2)
+                b = QString::fromStdString(param).toInt(0, 16);
+        }
+        state.m_event.push_back(std::make_pair(a, b));
+    }
+
     m_state.clear();
     m_state.push_back(state);
     on_tabWidget_currentChanged(ui->tabWidget->currentIndex());
@@ -611,6 +634,13 @@ void MainWindow::on_tabWidget_currentChanged(int)
     if (ui->tabWidget->currentWidget() == ui->tab_tileset)
         TilesetWnd_FullRedraw();
 }
+
+
+
+
+
+
+
 
 
 
