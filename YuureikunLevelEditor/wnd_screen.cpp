@@ -13,6 +13,7 @@ static std::map<int, QImage> s_block_raw_image_map;
 static double m_zoom = 1.0;
 static std::map<QString, QImage> s_image_hash;
 static std::vector<QImage> s_event_image_vector;
+static std::vector<int> s_event_id;
 
 struct GhostEvent
 {
@@ -58,11 +59,13 @@ void MainWindow::ScreenWnd_Init()
     ui->listWidget_events->setVisible(ui->checkBox_events->isChecked());
 
     s_event_image_vector.resize(256);
+    s_event_id.resize(256);
     ui->listWidget_events->blockSignals(true);
     ui->listWidget_events->clear();
     ui->listWidget_events->setIconSize(QSize(32, 32));
     for (int i = 0; i < sizeof(s_ghost_event)/sizeof(s_ghost_event[0]); ++i)
     {
+        s_event_id[i] = s_ghost_event[i].event;
         s_event_image_vector[(int)s_ghost_event[i].event] = QImage(s_ghost_event[i].url);
         ui->listWidget_events->addItem( new QListWidgetItem(QIcon(QPixmap::fromImage(QImage(s_ghost_event[i].url).scaled(32, 32))), s_ghost_event[i].text));
     }
@@ -113,12 +116,13 @@ void MainWindow::ScreenWnd_EventFilter(QObject* object, QEvent* event)
             {
                 if (block_x < state.m_event.size())
                 {
-                    if (ui->listWidget_events->currentRow() == 0)
+                    int event = s_event_id[ui->listWidget_events->currentRow()];
+                    if (event == 0)
                         block_y = 0;
-                    if (state.m_event[block_x].first != ui->listWidget_events->currentRow() ||
+                    if (state.m_event[block_x].first != event ||
                         state.m_event[block_x].second != block_y)
                     {
-                        state.m_event[block_x].first = ui->listWidget_events->currentRow();
+                        state.m_event[block_x].first = event;
                         state.m_event[block_x].second = block_y;
                         StatePush(state);
                         ScreenWnd_RedrawScreen();
@@ -164,13 +168,6 @@ void MainWindow::ScreenWnd_ValidateDepth(State &state, int x, int y)
     if (block_main_itt == state.m_block_map.end())
         return;
 
-    /*if (!BlockLogicCanTransform(block_main_itt->second.block_logic))
-    {
-        for (int depth = 0; depth < 3; ++depth)
-            state.m_depth_tiles[depth][x][y] = -1;
-        return;
-    }*/
-
     for (int depth = 0; depth < 3; ++depth)
     {
         int block = state.m_depth_tiles[depth][x][y];
@@ -195,11 +192,6 @@ void MainWindow::ScreenWnd_ValidateDepth(State &state, int x, int y)
                 state.m_depth_tiles[d][x][y] = -1;
             return;
         }
-        /*if (!BlockLogicCanTransform(block_itt->second.block_logic))
-        {
-            for (int d = depth+1; d < 3; ++d)
-                state.m_depth_tiles[d][x][y] = -1;
-        }*/
     }
 }
 

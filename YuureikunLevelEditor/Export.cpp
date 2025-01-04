@@ -605,7 +605,8 @@ void MainWindow::on_btn_export_stage_clicked()
     stream << "  .db low(" << state.m_name.toStdString() << "_block_transform)" << std::endl;
     stream << "  .db high(" << state.m_name.toStdString() << "_block_transform)" << std::endl;
     stream << "  ;D: row event" << std::endl;
-    stream << "  .db 0, 0" << std::endl;
+    stream << "  .db low(" << state.m_name.toStdString() << "_events)" << std::endl;
+    stream << "  .db high(" << state.m_name.toStdString() << "_events)" << std::endl;
     stream << std::endl;
 
     stream << state.m_name.toStdString() << "_map:" << std::endl;
@@ -621,6 +622,28 @@ void MainWindow::on_btn_export_stage_clicked()
         }
         stream << std::endl;
     }
+
+    stream << std::endl;
+    stream << state.m_name.toStdString() << "_events:" << std::endl;
+    int pos = 0;
+    for (size_t n = 0; n < state.m_event.size(); ++n)
+    {
+        if (pos == 0)
+            stream << "  .db ";
+        else
+            stream << ",";
+        stream << "$" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+               << (uint16_t)state.m_event[n].first;
+        stream << ",$" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+               << (uint16_t)state.m_event[n].second;
+        pos += 2;
+        if (pos == 16)
+        {
+            pos = 0;
+            stream << std::endl;
+        }
+    }
+    stream << "  .db $00,$00,$00,$00" << std::endl;
 
     QFile file(file_name);
     file.open(QFile::WriteOnly);
