@@ -277,85 +277,94 @@ void MainWindow::on_pushButton_export_clicked()
     {
         for (size_t n = 0; n < m_oam_vector.size(); ++n)
         {
-            std::vector<uint8_t> bin = m_oam_vector[n].chr_export;
-            if (ui->checkBox_two_frames_blinking->isChecked())
-                bin.insert(bin.end(), m_oam_vector[n].chr_export_blink.begin(), m_oam_vector[n].chr_export_blink.end());
-
-            std::vector<uint8_t> bin_v(bin.size());
-            if (sprite_mode == SpriteMode_8x8)
-            {
-                for (size_t n = 0; n < 8; ++n)
-                {
-                    bin_v[n]   = bin[7-n];
-                    bin_v[8+n] = bin[8+7-n];
-                    if (ui->checkBox_two_frames_blinking->isChecked())
-                    {
-                        bin_v[16+n] = bin[16+7-n];
-                        bin_v[16+8+n] = bin[16+8+7-n];
-                    }
-                }
-            } else
-            {
-                for (size_t n = 0; n < 8; ++n)
-                {
-                    bin_v[n]   = bin[16+7-n];
-                    bin_v[8+n] = bin[16+8+7-n];
-                    bin_v[16+n]   = bin[7-n];
-                    bin_v[16+8+n] = bin[8+7-n];
-                    if (ui->checkBox_two_frames_blinking->isChecked())
-                    {
-                        bin_v[32+n] = bin[32+16+7-n];
-                        bin_v[32+8+n] = bin[32+16+8+7-n];
-                        bin_v[32+16+n]   = bin[32+7-n];
-                        bin_v[32+16+8+n] = bin[32+8+7-n];
-                    }
-                }
-            }
-
-            std::vector<uint8_t> bin_h(bin.size(), 0);
-            std::vector<uint8_t> bin_hv(bin.size(), 0);
-            for (size_t n = 0; n < bin.size(); ++n)
-            {
-                for (size_t b = 0; b < 8; ++b)
-                {
-                    if ((uint8_t)(bin[n] & (1 << b)) != 0)
-                        bin_h[n] |= 0x80 >> b;
-                    if ((uint8_t)(bin_v[n] & (1 << b)) != 0)
-                        bin_hv[n] |= 0x80 >> b;
-                }
-            }
-
             int index;
             uint8_t flag = 0;
-            auto itt = oam_map.find(bin);
-            if (itt != oam_map.end())
-                index = itt->second;
-            else
+
+
+            if (ui->checkBox_two_frames_blinking->isChecked())
             {
-                auto itt = oam_map.find(bin_h);
-                if (itt != oam_map.end())
+                index = n;
+                std::vector<uint8_t> bin = m_oam_vector[n].chr_export;
+                std::vector<uint8_t> bin_blink = m_oam_vector[n].chr_export_blink;
+                oam_chr.insert(oam_chr.end(), bin.begin(), bin.end());
+                oam_chr_blink.insert(oam_chr_blink.end(), bin_blink.begin(), bin_blink.end());
+            } else
+            {
+                std::vector<uint8_t> bin = m_oam_vector[n].chr_export;
+                std::vector<uint8_t> bin_v(bin.size());
+                if (sprite_mode == SpriteMode_8x8)
                 {
-                    index = itt->second;
-                    flag |= 0x40;
+                    for (size_t n = 0; n < 8; ++n)
+                    {
+                        bin_v[n]   = bin[7-n];
+                        bin_v[8+n] = bin[8+7-n];
+                        if (ui->checkBox_two_frames_blinking->isChecked())
+                        {
+                            bin_v[16+n] = bin[16+7-n];
+                            bin_v[16+8+n] = bin[16+8+7-n];
+                        }
+                    }
                 } else
                 {
-                    auto itt = oam_map.find(bin_v);
+                    for (size_t n = 0; n < 8; ++n)
+                    {
+                        bin_v[n]   = bin[16+7-n];
+                        bin_v[8+n] = bin[16+8+7-n];
+                        bin_v[16+n]   = bin[7-n];
+                        bin_v[16+8+n] = bin[8+7-n];
+                        if (ui->checkBox_two_frames_blinking->isChecked())
+                        {
+                            bin_v[32+n] = bin[32+16+7-n];
+                            bin_v[32+8+n] = bin[32+16+8+7-n];
+                            bin_v[32+16+n]   = bin[32+7-n];
+                            bin_v[32+16+8+n] = bin[32+8+7-n];
+                        }
+                    }
+                }
+
+                std::vector<uint8_t> bin_h(bin.size(), 0);
+                std::vector<uint8_t> bin_hv(bin.size(), 0);
+                for (size_t n = 0; n < bin.size(); ++n)
+                {
+                    for (size_t b = 0; b < 8; ++b)
+                    {
+                        if ((uint8_t)(bin[n] & (1 << b)) != 0)
+                            bin_h[n] |= 0x80 >> b;
+                        if ((uint8_t)(bin_v[n] & (1 << b)) != 0)
+                            bin_hv[n] |= 0x80 >> b;
+                    }
+                }
+
+                auto itt = oam_map.find(bin);
+                if (itt != oam_map.end())
+                    index = itt->second;
+                else
+                {
+                    auto itt = oam_map.find(bin_h);
                     if (itt != oam_map.end())
                     {
                         index = itt->second;
-                        flag |= 0x80;
+                        flag |= 0x40;
                     } else
                     {
-                        auto itt = oam_map.find(bin_hv);
+                        auto itt = oam_map.find(bin_v);
                         if (itt != oam_map.end())
                         {
                             index = itt->second;
-                            flag |= 0x80 | 0x40;
+                            flag |= 0x80;
                         } else
                         {
-                            index = oam_map.size();
-                            oam_chr.insert(oam_chr.end(), bin.begin(), bin.end());
-                            oam_map.insert(std::make_pair(bin, index));
+                            auto itt = oam_map.find(bin_hv);
+                            if (itt != oam_map.end())
+                            {
+                                index = itt->second;
+                                flag |= 0x80 | 0x40;
+                            } else
+                            {
+                                index = oam_map.size();
+                                oam_chr.insert(oam_chr.end(), bin.begin(), bin.end());
+                                oam_map.insert(std::make_pair(bin, index));
+                            }
                         }
                     }
                 }

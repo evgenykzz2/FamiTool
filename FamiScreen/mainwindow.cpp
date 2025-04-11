@@ -727,7 +727,7 @@ bool MainWindow::eventFilter( QObject* object, QEvent* event )
                             index = itt->second;
                         m_pick_fami_palette_dialog.SetOriginalColor(m_pick_palette_cvt_color);
                         const uint32_t* palette = GetPalette((EPalette)ui->comboBox_palette_mode->itemData(ui->comboBox_palette_mode->currentIndex()).toInt());
-                        m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite, m_blink_palette_bg);
+                        m_pick_fami_palette_dialog.SetPalette(palette, m_palette_sprite, m_blink_palette_sprite);
                         m_pick_fami_palette_dialog.SetPaletteIndex(index);
                         m_pick_fami_palette_dialog.SetBlinkingPaletteMode(ui->checkBox_two_frames_blinking->isChecked());
                         m_pick_fami_palette_dialog.UpdatePalette();
@@ -1861,7 +1861,7 @@ void MainWindow::RedrawOamTab()
                             {
                                 //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
                                     //continue;
-                                if (m_blink_palette_bg.color[itt->second] == m_blink_palette_sprite.color[pindex*16 + c])
+                                if (m_blink_palette_sprite.color[itt->second] == m_blink_palette_sprite.color[pindex*16 + c])
                                 {
                                     //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + c];
                                     color_index = pindex*16 + c;
@@ -1871,29 +1871,26 @@ void MainWindow::RedrawOamTab()
                             }
                             if (found == false)
                             {
-                                //Find any Color
-                                int64_t best_diff = INT64_MAX;
+                                //Find Color in row
+                                int64_t best_diff = 24*24*24;
                                 int best_c = 1;
-                                int best_p = 0;
-                                for (int p = 0; p < 4; ++p)
+                                int best_p = -1;
+                                for (int c = 0; c < 16; ++c)
                                 {
-                                    for (int c = 0; c < 16; ++c)
+                                    //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
+                                        //continue;
+                                    int dr = (color & 0xFF) - (m_blink_palette_sprite.color[pindex*16 + c] & 0xFF);
+                                    int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[pindex*16 + c] >> 8) & 0xFF);
+                                    int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[pindex*16 + c] >> 16) & 0xFF);
+                                    int64_t diff = dr*dr + dg*dg + db*db;
+                                    if (diff < best_diff)
                                     {
-                                        //if (c % 4 == 0 || c / 4 == 0 || m_blink_palette_sprite.enable[pindex*16 + c] == 0)
-                                            //continue;
-                                        int dr = (color & 0xFF) - (m_blink_palette_sprite.color[p*16 + c] & 0xFF);
-                                        int dg = ((color >> 8) & 0xFF) -  ((m_blink_palette_sprite.color[p*16 + c] >> 8) & 0xFF);
-                                        int db = ((color >> 16) & 0xFF) - ((m_blink_palette_sprite.color[p*16 + c] >> 16) & 0xFF);
-                                        int64_t diff = dr*dr + dg*dg + db*db;
-                                        if (diff < best_diff)
-                                        {
-                                            best_diff = diff;
-                                            best_c = c;
-                                            best_p = p;
-                                        }
+                                        best_diff = diff;
+                                        best_c = c;
+                                        best_p = 1;
                                     }
                                 }
-                                if (best_p == pindex)
+                                if (best_p >= 0)
                                 {
                                     found = true;
                                     //render_line[xp] = m_blink_palette_sprite.color[pindex*16 + best_c];
